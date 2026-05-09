@@ -1,0 +1,25 @@
+Data Source,Metric,Season,Month,Month Metric Total,Month Metric Fraction
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2024-07,0.0,0.0
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2024-08,0.0,0.0
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2024-09,0.0,0.0
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2024-10,448.0,0.0067438394725354124
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2024-11,9805.0,0.14759675452725385
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2024-12,17536.0,0.2639731450678147
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2025-01,15851.0,0.23860848098026524
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2025-02,10831.0,0.1630413511764086
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2025-03,8154.0,0.12274389968538785
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2025-04,2246.0,0.03380951664132709
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2025-05,1084.0,0.016317683009438366
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,2025-06,476.0,0.007165329439568876
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2024-07,1.95,0.00271066751925269
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2024-08,3.49,0.00485139981650866
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2024-09,5.62,0.007812282799076983
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2024-10,14.120000000000001,0.019628013011204093
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2024-11,73.13,0.10165698240151241
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2024-12,158.71,0.2206205343490228
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2025-01,164.19,0.22823820512107648
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2025-02,134.92,0.18755039061413994
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2025-03,112.14,0.1558842336456393
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2025-04,34.12,0.047429731157385524
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2025-05,13.02,0.018098918513164114
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,2025-06,3.97,0.005518641052017015

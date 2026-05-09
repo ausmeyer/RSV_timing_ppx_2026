@@ -1,0 +1,238 @@
+================================================================================
+    MANUSCRIPT DATA SUMMARY: RSV Activity Outside October–March Window
+    2025-26 Season Extension (3 NSSP Seasons, Up to 3 NHSN Seasons)
+================================================================================
+
+PARAGRAPH 1 — National and State-Level Findings (Figure 1: Choropleths)
+--------------------------------------------------------------------------------
+
+Out-of-Window Fractions:
+
+  NSSP 2023-2024:
+    • Median: 6.0%
+    • IQR: 4.9% – 9.7%
+    • Range: 2.5% – 24.9%
+    • N = 50 jurisdictions
+    • Top 5: Florida (24.9%), Georgia (18.2%), Mississippi (15.5%), Wyoming (12.9%), South Dakota (12.0%)
+    • Bootstrap 95% CI for median: [5.3%, 6.9%]
+
+  NSSP 2024-2025:
+    • Median: 7.6%
+    • IQR: 6.3% – 10.2%
+    • Range: 4.1% – 17.1%
+    • N = 50 jurisdictions
+    • Top 5: South Dakota (17.1%), Montana (15.9%), Florida (15.8%), Wyoming (15.7%), North Dakota (14.6%)
+    • Bootstrap 95% CI for median: [6.7%, 8.2%]
+
+  NSSP 2025-2026:
+    • Median: 12.0%
+    • IQR: 10.2% – 16.6%
+    • Range: 6.0% – 33.6%
+    • N = 50 jurisdictions
+    • Top 5: Maine (33.6%), North Dakota (29.8%), Montana (29.2%), Nebraska (28.6%), Wyoming (23.7%)
+    • Bootstrap 95% CI for median: [10.7%, 14.1%]
+
+  NHSN 2024-2025:
+    • Median: 5.6%
+    • IQR: 4.5% – 8.5%
+    • Range: 1.6% – 17.6%
+    • N = 51 jurisdictions
+    • Top 5: South Dakota (17.6%), Montana (14.8%), North Dakota (13.7%), Arkansas (13.6%), West Virginia (13.0%)
+    • Bootstrap 95% CI for median: [6.7%, 8.2%]
+
+  NHSN 2025-2026:
+    • Median: 9.4%
+    • IQR: 6.5% – 12.0%
+    • Range: 1.0% – 30.2%
+    • N = 51 jurisdictions
+    • Top 5: North Dakota (30.2%), Vermont (25.0%), Montana (24.1%), West Virginia (20.6%), Alaska (19.2%)
+    • Bootstrap 95% CI for median: [10.7%, 14.1%]
+
+PARAGRAPH 2 — Alternative Window Scenarios (Figure 3: Coverage Comparison)
+--------------------------------------------------------------------------------
+
+  Window                         NSSP 2023-2024   NSSP 2024-2025   NSSP 2025-2026   NHSN 2024-2025   NHSN 2025-2026
+  -----------------------------------------------------------------------------------------------------------------
+  Baseline (Oct-Mar)                     94.0%           92.4%           88.0%           94.4%           90.6%
+  Early (Sep-Mar)                        95.7%           93.2%           89.0%           94.4%           92.4%
+  Late (Oct-Apr)                         96.3%           96.4%           98.5%           98.1%           98.4%
+  Extended (Sep-Apr)                     97.7%           97.2%           99.2%           98.1%           99.1%
+
+Coverage Improvement vs Baseline (percentage points):
+
+  NSSP 2023-2024:
+    • Early:    +1.7 pp
+    • Late:     +2.3 pp
+    • Extended: +3.7 pp
+
+  NSSP 2024-2025:
+    • Early:    +0.8 pp
+    • Late:     +3.9 pp
+    • Extended: +4.8 pp
+
+  NSSP 2025-2026:
+    • Early:    +1.0 pp
+    • Late:     +10.5 pp
+    • Extended: +11.1 pp
+
+  NHSN 2024-2025:
+    • Early:    +0.0 pp
+    • Late:     +3.7 pp
+    • Extended: +3.7 pp
+
+  NHSN 2025-2026:
+    • Early:    +1.9 pp
+    • Late:     +7.8 pp
+    • Extended: +8.6 pp
+
+PARAGRAPH 3 — NHSN Age-Stratified Analysis (Figure 2: Ridgeline Plots)
+--------------------------------------------------------------------------------
+
+  Age stratum: Ages 0-4
+    2024-2025: median=5.6% (IQR 4.5–8.5%)
+    2025-2026: median=9.4% (IQR 6.5–12.0%)
+
+  Age stratum: All pediatric
+    2024-2025: median=5.5% (IQR 4.5–8.5%)
+    2025-2026: median=9.2% (IQR 6.5–11.2%)
+
+  Age stratum: All ages
+    2024-2025: median=7.9% (IQR 6.2–11.5%)
+    2025-2026: median=11.7% (IQR 7.7–15.9%)
+
+PARAGRAPH 4 — Longitudinal Consistency Across Seasons
+--------------------------------------------------------------------------------
+
+  NSSP:
+    • Median state-level CV: 0.415
+    • Spearman ρ (2023-24 vs 2024-25): 0.298
+    • Spearman ρ (2024-25 vs 2025-26): 0.807
+
+  NHSN:
+    • Median state-level CV: 0.341
+    • Spearman ρ (2023-24 vs 2024-25): not available
+    • Spearman ρ (2024-25 vs 2025-26): 0.615
+
+PARAGRAPH 5 — Infant Prophylaxis Protection Model, Realistic Delivery Priors (Figure 3)
+--------------------------------------------------------------------------------
+
+  NSSP curve-weighted model, realistic delivery priors, 12-month censor:
+    • Baseline (Oct-Mar): median person-level protection=14.0% (state IQR 12.7–14.4%); population activity-weighted protection=11.5%; dose opportunity=12.3%
+    • Early (Sep-Mar): median person-level protection=14.2% (state IQR 14.0–14.3%); population activity-weighted protection=12.7%; dose opportunity=13.3%
+    • Late (Oct-Apr): median person-level protection=14.0% (state IQR 13.1–14.4%); population activity-weighted protection=11.6%; dose opportunity=13.3%
+    • Extended (Sep-Apr): median person-level protection=14.2% (state IQR 14.0–14.3%); population activity-weighted protection=12.7%; dose opportunity=14.3%
+
+  NHSN ages 0-4 curve-weighted model, realistic delivery priors, 12-month censor:
+    • Baseline (Oct-Mar): median person-level protection=14.3% (state IQR 13.6–14.5%); population activity-weighted protection=12.0%; dose opportunity=13.1%
+    • Early (Sep-Mar): median person-level protection=14.3% (state IQR 14.1–14.4%); population activity-weighted protection=13.0%; dose opportunity=14.2%
+    • Late (Oct-Apr): median person-level protection=14.3% (state IQR 13.8–14.5%); population activity-weighted protection=12.0%; dose opportunity=14.1%
+    • Extended (Sep-Apr): median person-level protection=14.3% (state IQR 14.2–14.4%); population activity-weighted protection=13.0%; dose opportunity=15.2%
+
+PARAGRAPH 6 — Infant Prophylaxis Protection Model, 8-Month Exposure Censor (Figure 4)
+--------------------------------------------------------------------------------
+
+  NSSP curve-weighted model, realistic delivery priors, 8-month censor:
+    • Baseline (Oct-Mar): median person-level protection=13.3% (state IQR 12.3–13.8%); population activity-weighted protection=13.7%; dose opportunity=12.3%
+    • Early (Sep-Mar): median person-level protection=13.9% (state IQR 13.6–14.1%); population activity-weighted protection=13.9%; dose opportunity=13.3%
+    • Late (Oct-Apr): median person-level protection=13.4% (state IQR 12.7–13.9%); population activity-weighted protection=13.7%; dose opportunity=13.3%
+    • Extended (Sep-Apr): median person-level protection=14.0% (state IQR 13.7–14.1%); population activity-weighted protection=13.9%; dose opportunity=14.3%
+
+  NHSN ages 0-4 curve-weighted model, realistic delivery priors, 8-month censor:
+    • Baseline (Oct-Mar): median person-level protection=14.1% (state IQR 13.4–14.5%); population activity-weighted protection=13.9%; dose opportunity=13.5%
+    • Early (Sep-Mar): median person-level protection=14.6% (state IQR 14.0–14.7%); population activity-weighted protection=14.0%; dose opportunity=14.6%
+    • Late (Oct-Apr): median person-level protection=14.1% (state IQR 13.6–14.5%); population activity-weighted protection=13.9%; dose opportunity=14.6%
+    • Extended (Sep-Apr): median person-level protection=14.6% (state IQR 14.1–14.7%); population activity-weighted protection=14.1%; dose opportunity=15.7%
+
+PARAGRAPH 7 — Infant Prophylaxis Protection Model Robustness (Figure 5)
+--------------------------------------------------------------------------------
+
+  NSSP:
+    • Early Sep-Mar exceeded late Oct-Apr in 9/9 stress scenarios.
+    • Early Sep-Mar exceeded Oct-Mar baseline in 9/9 stress scenarios.
+    • Extended Sep-Apr exceeded Oct-Mar baseline in 9/9 stress scenarios.
+    • Median early-minus-baseline change across scenarios: 0.58 percentage points.
+
+  NHSN ages 0-4:
+    • Early Sep-Mar exceeded late Oct-Apr in 2/9 stress scenarios.
+    • Early Sep-Mar exceeded Oct-Mar baseline in 2/9 stress scenarios.
+    • Extended Sep-Apr exceeded Oct-Mar baseline in 3/9 stress scenarios.
+    • Median early-minus-baseline change across scenarios: -0.03 percentage points.
+
+PARAGRAPH 8 — Hospitalization Translation (100% uptake scenario)
+--------------------------------------------------------------------------------
+
+  2023-2024: Early Sep-Mar vs baseline Oct-Mar averted an estimated 4225 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=44.6; IQR=16.4-94.7).
+  2024-2025: Early Sep-Mar vs baseline Oct-Mar averted an estimated 2743 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=30.0; IQR=9.8-62.9).
+  2025-2026: Early Sep-Mar vs baseline Oct-Mar averted an estimated 2117 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=23.4; IQR=6.7-49.6).
+  2023-2024: Late Oct-Apr vs baseline Oct-Mar averted an estimated 58 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=0.8; IQR=0.4-1.2).
+  2024-2025: Late Oct-Apr vs baseline Oct-Mar averted an estimated 98 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=1.2; IQR=0.7-2.4).
+  2025-2026: Late Oct-Apr vs baseline Oct-Mar averted an estimated 70 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=0.9; IQR=0.6-1.9).
+  2023-2024: Extended Sep-Apr vs baseline Oct-Mar averted an estimated 4283 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=45.5; IQR=16.5-95.5).
+  2024-2025: Extended Sep-Apr vs baseline Oct-Mar averted an estimated 2841 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=31.5; IQR=10.7-65.3).
+  2025-2026: Extended Sep-Apr vs baseline Oct-Mar averted an estimated 2187 RSV hospitalizations nationally under the 100% uptake, otherwise-reference scenario (median state=24.7; IQR=6.9-50.7).
+  Translation uses a baseline untreated infant RSV hospitalization risk of 11.77 per 1,000 infant-seasons.
+
+================================================================================
+
+                     SUGGESTED TEXT FOR MANUSCRIPT
+================================================================================
+
+RESULTS PARAGRAPH 1 (NSSP):
+--------------------------------------------------------------------------------
+Across states, the median fraction of RSV-associated ED visits (NSSP) occurring outside the October–March window was 6.0% (IQR: 4.9–9.7%) in 2023-2024; and 7.6% (IQR: 6.3–10.2%) in 2024-2025; and 12.0% (IQR: 10.2–16.6%) in 2025-2026.
+
+RESULTS PARAGRAPH 2 (NHSN):
+--------------------------------------------------------------------------------
+For laboratory-confirmed RSV-associated pediatric hospitalizations (NHSN, ages 0–4), the median out-of-window fraction was 5.6% (IQR: 4.5–8.5%) in 2024-2025; and 9.4% (IQR: 6.5–12.0%) in 2025-2026.
+
+DISCUSSION PARAGRAPH:
+--------------------------------------------------------------------------------
+Across 3 NSSP seasons and 2 NHSN season(s), approximately 8% of RSV activity nationally — and up to 34% in some states — occurred outside the current recommended October–March nirsevimab administration window. This pattern was consistent across seasons, suggesting that year-over-year variability does not eliminate out-of-window burden.
+
+================================================================================
+
+METHODOLOGICAL DETAILS
+================================================================================
+
+DATA SOURCES
+--------------------------------------------------------------------------------
+
+NSSP:
+  • Dataset: CDC NSSP Emergency Department Visit Trajectories
+  • Socrata API dataset ID: rdmq-nq56
+  • Field: percent_visits_rsv (% of ED visits with RSV-related code, all ages)
+  • Seasons: 2023-2024, 2024-2025, 2025-2026
+  • Geographic scope: all available states plus District of Columbia; aggregate rows and territories excluded
+
+NHSN:
+  • Dataset: CDC NHSN Weekly Hospital Respiratory Data (HRD)
+  • Socrata API dataset ID: ua7e-t2fy
+  • Primary field: numconfrsvnewadmped0to4 (lab-confirmed RSV admissions, ages 0-4)
+  • Additional strata: totalconfrsvnewadmped (all pediatric), totalconfrsvnewadm (all ages)
+  • Seasons included: 2024-2025, 2025-2026
+  • Completeness criterion: ≥45 states reporting for 2023-24, ≥40 for later seasons
+
+BOOTSTRAP CONFIDENCE INTERVALS
+--------------------------------------------------------------------------------
+  • Nonparametric bootstrap, 10,000 replicates
+  • Resample states with replacement (n = number of states per season)
+  • Point estimate: median outside fraction
+  • 95% CI: 2.5th and 97.5th percentiles of bootstrap distribution
+
+LONGITUDINAL CONSISTENCY
+--------------------------------------------------------------------------------
+  • State-level coefficient of variation (CV) = SD / mean across seasons
+  • Spearman rank correlation of state outside-fractions between season pairs
+  • Assesses whether states that are high in one season remain high in the next
+
+INFANT PROPHYLAXIS PROTECTION MODEL
+--------------------------------------------------------------------------------
+  • Daily birth cohorts with births uniformly distributed across calendar days
+  • Cohorts begin with infants who could be eligible at the earliest scenario window
+  • Eligible infants receive prophylaxis at the first routine well-child visit inside each scenario window
+  • Base assumptions: 100% uptake at eligible visits, eligibility for receipt before age 8 months, follow-up censored at age 12 months
+  • Protection assumptions: 6-day delay to protection and 180-day protection duration
+  • Primary metric: median person-level fraction of observed infant RSV exposure occurring while protected
+  • State-season RSV exposure weights come from the observed NSSP or NHSN epidemic curve
+
+================================================================================

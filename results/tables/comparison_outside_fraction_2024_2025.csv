@@ -1,0 +1,3 @@
+Data Source,Metric,Season,N States,Median Outside Fraction,Unweighted Outside Fraction,Weighted Outside Fraction,Total Metric (sum over weeks)
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2024-2025,51,0.055845511482254695,0.06791341267413673,0.05729252909033433,66431.0
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2024-2025,50,0.07584023503897139,0.08614706228558384,0.08642164085740499,719.38

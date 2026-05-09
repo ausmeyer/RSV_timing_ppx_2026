@@ -1,0 +1,21 @@
+Data Source,Metric,Season,Month,Month Metric Total,Month Metric Fraction
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2025-07,360.0,0.007620337834977351
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2025-08,454.0,0.009610092714110325
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2025-09,675.0,0.014288133440582532
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2025-10,1454.0,0.030777697811269634
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2025-11,4169.0,0.08824774565005715
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2025-12,7368.0,0.1559629143558698
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2026-01,11372.0,0.24071800516489564
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2026-02,10733.0,0.22719190550781085
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2026-03,7862.0,0.16641971127386648
+NHSN,"Pediatric RSV hospital admissions, ages 0-4",2025-2026,2026-04,2795.0,0.05916345624656026
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2025-07,2.45,0.004347826086956522
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2025-08,3.57,0.006335403726708075
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2025-09,4.74,0.008411712511091393
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2025-10,9.35,0.016592724046140195
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2025-11,30.13,0.05346938775510204
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2025-12,64.39,0.11426796805678793
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2026-01,122.94,0.2181721384205856
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2026-02,133.04,0.2360958296362023
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2026-03,125.51,0.2227329192546584
+NSSP,"RSV ED visit percentage of total ED visits, all ages",2025-2026,2026-04,67.38,0.11957409050576752

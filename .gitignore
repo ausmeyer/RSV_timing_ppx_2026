@@ -1,0 +1,21 @@
+# Manuscript drafts and local Word artifacts
+manuscript/
+~$*.docx
+~$*.doc
+
+# Local OS/editor artifacts
+.DS_Store
+._*
+
+# Runtime logs and caches
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local environments
+.venv/
+venv/
+env/
+
