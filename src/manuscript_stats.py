@@ -61,7 +61,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     # -----------------------------------------------------------------------
     # Helper: summarise outside fraction for one season / data source
     # -----------------------------------------------------------------------
-    def summarize_outside(df, season, label):
+    def summarize_outside(df, season, label, datasource: str = ""):
         if df.empty:
             add(f"\n  {label}: [data not available]")
             return None, None, None, None, None
@@ -89,12 +89,15 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             f"{r.jurisdiction} ({r.outside_fraction*100:.1f}%)" for _, r in top5.iterrows()
         ))
 
-        # Bootstrap CI if available
+        # Bootstrap CI if available — filter by datasource to avoid cross-source lookup
         if not bootstrap_ci.empty:
-            ci_row = bootstrap_ci[
+            ci_mask = (
                 (bootstrap_ci.get("season", pd.Series(dtype=str)) == season) &
                 (bootstrap_ci["metric"] == "median_outside_fraction")
-            ]
+            )
+            if datasource and "datasource" in bootstrap_ci.columns:
+                ci_mask &= bootstrap_ci["datasource"] == datasource
+            ci_row = bootstrap_ci[ci_mask]
             if len(ci_row) > 0:
                 lo = ci_row["ci_lower"].iloc[0] * 100
                 hi = ci_row["ci_upper"].iloc[0] * 100
@@ -114,10 +117,10 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     nhsn_seasons_avail = sorted(nhsn_outside["season"].unique()) if not nhsn_outside.empty else []
 
     for s in nssp_seasons:
-        summarize_outside(nssp_outside, s, f"NSSP {s}")
+        summarize_outside(nssp_outside, s, f"NSSP {s}", datasource="nssp")
 
     for s in nhsn_seasons_avail:
-        summarize_outside(nhsn_outside, s, f"NHSN {s}")
+        summarize_outside(nhsn_outside, s, f"NHSN {s}", datasource="nhsn")
 
     add()
 

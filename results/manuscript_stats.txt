@@ -38,7 +38,7 @@ Out-of-Window Fractions:
     • Range: 1.6% – 17.6%
     • N = 51 jurisdictions
     • Top 5: South Dakota (17.6%), Montana (14.8%), North Dakota (13.7%), Arkansas (13.6%), West Virginia (13.0%)
-    • Bootstrap 95% CI for median: [6.7%, 8.2%]
+    • Bootstrap 95% CI for median: [5.0%, 6.7%]
 
   NHSN 2025-2026:
     • Median: 9.4%
@@ -46,7 +46,7 @@ Out-of-Window Fractions:
     • Range: 1.0% – 30.2%
     • N = 51 jurisdictions
     • Top 5: North Dakota (30.2%), Vermont (25.0%), Montana (24.1%), West Virginia (20.6%), Alaska (19.2%)
-    • Bootstrap 95% CI for median: [10.7%, 14.1%]
+    • Bootstrap 95% CI for median: [7.1%, 10.8%]
 
 PARAGRAPH 2 — Alternative Window Scenarios (Figure 3: Coverage Comparison)
 --------------------------------------------------------------------------------
