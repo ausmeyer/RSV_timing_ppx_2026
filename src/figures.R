@@ -3,7 +3,7 @@
 # figures.R — 2025-26 Season Extension
 #
 # Generates publication figures:
-#   Figure 1: State choropleth grid (3 NSSP + up to 3 NHSN panels)
+#   Figure 1: State choropleth grid (3 NSSP + available NHSN panels)
 #   Figure 2: Ridgeline density plots by season and age group (ggridges)
 #             - Layout A: seasons as ridgelines, faceted by age group
 #             - Layout B: age groups as ridgelines, faceted by season
@@ -227,9 +227,9 @@ choropleth_theme <- function() {
 # =============================================================================
 # FIGURE 1: Choropleth grid
 # =============================================================================
-# Seasons are columns, sources (NSSP / NHSN) are rows.
-# Uses facet_grid(source ~ season) so panels align vertically.
-# Missing cells (e.g. NHSN 2023-24) render as all-gray (no data).
+# Sources are rows and seasons are columns so the NHSN panels align with the
+# corresponding NSSP year. Source-season combinations with no data (e.g. NHSN
+# 2023-24) render as a blank white panel.
 
 plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_label) {
   states_sf <- get_states_sf()
@@ -259,23 +259,21 @@ plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_la
       source = factor(source, levels = c("NSSP", "NHSN"))
     )
 
-  # Build the full grid of (state, source, season) — missing combos get NA
-  all_combos <- expand.grid(
-    jurisdiction = unique(states_sf$jurisdiction),
-    source       = factor(c("NSSP", "NHSN"), levels = c("NSSP", "NHSN")),
-    season       = factor(all_seasons, levels = all_seasons),
-    stringsAsFactors = FALSE
-  )
+  available_panels <- combined |>
+    filter(!is.na(outside_fraction)) |>
+    distinct(source, season)
 
   n_seasons <- length(all_seasons)
-  states_rep <- states_sf[rep(seq_len(nrow(states_sf)), each = 2 * n_seasons), ]
-  states_rep$source <- rep(
-    rep(factor(c("NSSP", "NHSN"), levels = c("NSSP", "NHSN")), each = n_seasons),
-    times = nrow(states_sf)
-  )
-  states_rep$season <- rep(
-    rep(factor(all_seasons, levels = all_seasons), times = 2),
-    times = nrow(states_sf)
+  panel_combos <- expand_grid(
+    source = factor(c("NSSP", "NHSN"), levels = c("NSSP", "NHSN")),
+    season = factor(all_seasons, levels = all_seasons)
+  ) |>
+    semi_join(available_panels, by = c("source", "season"))
+
+  states_rep <- states_sf[rep(seq_len(nrow(states_sf)), each = nrow(panel_combos)), ]
+  states_rep <- bind_cols(
+    states_rep,
+    panel_combos[rep(seq_len(nrow(panel_combos)), times = nrow(states_sf)), ]
   )
 
   joined <- states_rep |>
@@ -289,7 +287,7 @@ plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_la
   p <- ggplot(joined) +
     geom_sf(aes(fill = outside_fraction), color = "gray70", linewidth = 0.15) +
     coord_sf(crs = "ESRI:102003", datum = NA) +
-    facet_grid(source ~ season) +
+    facet_grid(source ~ season, drop = FALSE) +
     scale_fill_gradient(
       low = "#fee5d9", high = "#a50f15",
       limits = c(0, vmax), oob = scales::squish, na.value = "lightgray",
@@ -301,7 +299,7 @@ plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_la
     ) +
     choropleth_theme()
 
-  # Panel dimensions: columns = seasons, rows = 2 sources
+  # Panel dimensions: columns = seasons, rows = 2 sources.
   states_proj <- sf::st_transform(states_sf, "ESRI:102003")
   bbox <- sf::st_bbox(states_proj)
   ar <- as.numeric((bbox["xmax"] - bbox["xmin"]) / (bbox["ymax"] - bbox["ymin"]))
@@ -691,9 +689,9 @@ plot_infant_ppx_stress_test <- function(state_summary) {
   if (is.null(state_summary) || nrow(state_summary) == 0) return(invisible(NULL))
 
   window_labels <- c(
-    early_sep_mar = "Early Sep-Mar",
-    late_oct_apr = "Late Oct-Apr",
-    extended_sep_apr = "Extended Sep-Apr"
+    early_sep_mar = "Early (Sep-Mar)",
+    late_oct_apr = "Late (Oct-Apr)",
+    extended_sep_apr = "Extended (Sep-Apr)"
   )
   df <- state_summary |>
     filter(datasource == "nssp") |>
@@ -737,9 +735,9 @@ plot_infant_ppx_stress_test <- function(state_summary) {
     ) +
     scale_fill_manual(
       values = c(
-        "Early Sep-Mar" = "#1b9e77",
-        "Late Oct-Apr" = "#d95f02",
-        "Extended Sep-Apr" = "#7570b3"
+        "Early (Sep-Mar)" = "#1b9e77",
+        "Late (Oct-Apr)" = "#d95f02",
+        "Extended (Sep-Apr)" = "#7570b3"
       ),
       breaks = unname(window_labels),
       name = NULL,
