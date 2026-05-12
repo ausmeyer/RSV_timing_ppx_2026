@@ -6,6 +6,7 @@ manuscript/
 # Local OS/editor artifacts
 .DS_Store
 ._*
+.claude/
 
 # Runtime logs and caches
 *.log
@@ -18,4 +19,6 @@ __pycache__/
 .venv/
 venv/
 env/
-
+.Rhistory
+.RData
+.Rproj.user/

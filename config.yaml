@@ -124,7 +124,7 @@ infant_ppx_model:
   protection_duration_days: 180  # six-month base assumption; 150 days is a sensitivity to consider
   efficacy_profile: "binary"     # binary or piecewise_linear
   efficacy_curve_points:
-    # Optional piecewise_linear profile. Figures 6-7 use this Moline et al.
+    # Optional piecewise_linear profile. Main infant-model figures use this Moline et al.
     # JAMA Pediatrics 2026 hospitalization VE sensitivity with a monotone
     # smoothed curve: day 6 is the PK delay and the <30 day VE bin, day 45 is
     # the midpoint of the 30-59 day bin, and day 210 is the end of the final
@@ -160,7 +160,7 @@ infant_ppx_model:
   allow_window_start_catchup: false
 
 # Citable priors for optional "more realistic delivery" sensitivities. These
-# are used in Figures 6-7. The full citation trail is written to
+# are used in the main infant-model figures. The full citation trail is written to
 # results/tables/infant_ppx_realistic_priors.csv.
 infant_ppx_realistic_priors:
   nirsevimab_uptake_2023_24: 0.185

@@ -268,7 +268,7 @@ REALISTIC_PRIOR_ROWS = [
             "doi:10.1001/jamapediatrics.2024.5572."
         ),
         "url": "https://jamanetwork.com/journals/jamapediatrics/fullarticle/2827176",
-        "note": "Retained as an optional endpoint-specific anchor; Figures 6-7 use the Moline et al. 2026 hospitalization time-since-dose curve.",
+        "note": "Retained as an optional endpoint-specific anchor; main infant-model figures use the Moline et al. 2026 hospitalization time-since-dose curve.",
     },
     {
         "assumption": "peak_rsv_hospitalization_effectiveness",
@@ -283,13 +283,13 @@ REALISTIC_PRIOR_ROWS = [
             "doi:10.1001/jamapediatrics.2024.5572."
         ),
         "url": "https://jamanetwork.com/journals/jamapediatrics/fullarticle/2827176",
-        "note": "Retained as a 2023-24 anchor; Figures 6-7 use the later Moline et al. 2026 hospitalization time-since-dose curve.",
+        "note": "Retained as a 2023-24 anchor; main infant-model figures use the later Moline et al. 2026 hospitalization time-since-dose curve.",
     },
     {
         "assumption": "moline_smoothed_time_since_dose_hospitalization_effectiveness",
         "recommended_value": "0.936 at day 6; 0.807 at day 45; 0.789 at day 210",
         "units": "effectiveness",
-        "use_in_model": "Smoothed efficacy-weighted sensitivity curve for Figures 6-7.",
+        "use_in_model": "Smoothed efficacy-weighted sensitivity curve for the main infant-model figures.",
         "source_type": "Peer-reviewed postlicensure study",
         "citation": (
             "Moline HL, Tannis A, Goldstein L, et al. Effectiveness and Impact of "

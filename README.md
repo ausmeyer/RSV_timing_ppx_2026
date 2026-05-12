@@ -117,22 +117,22 @@ The 6-day delay is based on the Beyfortus label median time to maximum
 nirsevimab concentration. The 8-month eligibility and October-March default
 administration period follow CDC/ACIP infant RSV immunization guidance.
 
-The default model treats protected days as fully covered (`efficacy_profile:
-"binary"`). To run a more realistic efficacy-weighted sensitivity, set
-`infant_ppx_model.efficacy_profile: "piecewise_linear"` in `config.yaml`. That
-option weights each day after prophylaxis by a configurable efficacy curve rather
-than counting all protected days as 1.0. The included curve is grounded in
-Moline et al. JAMA Pediatrics 2026 hospitalization effectiveness by time since
-nirsevimab receipt. It uses 93.6% after the day-6 PK delay, 80.7% at day 45
-(the midpoint of the 30-59 day bin), and 78.9% at day 210 (the end of the
+The configurable base model can treat protected days as fully covered
+(`efficacy_profile: "binary"`) or use a time-varying piecewise-linear
+effectiveness curve. The manuscript pipeline overrides the base settings for the
+primary infant-model figures and uses the realistic-delivery configuration:
+empirical uptake, first-week dosing, imperfect routine-visit timing, 6-day
+pharmacokinetic delay, and a Moline et al. JAMA Pediatrics 2026 hospitalization
+effectiveness curve through day 210.
+
+The included effectiveness curve uses 93.6% after the day-6 PK delay, 80.7% at
+day 45 (the midpoint of the 30-59 day bin), and 78.9% at day 210 (the end of the
 observed 130-210 day bin). The published 90-129 day point estimate was lower
 than the later 130-210 day estimate, so the model smooths monotonically from the
 30-59 day bin to day 210 rather than encoding that non-monotone dip literally.
-The default pipeline uses this curve through 210 days in Figure 3 and Figure 4.
 Figure 3 applies the realistic-delivery priors with the main 12-month first-year
-infant RSV exposure denominator. Figure 4 applies the same priors while
-censoring RSV exposure at age 8 months. Figure 5 stress-tests the window ranking
-under uptake, first-week dosing, visit-delay, and age-censoring scenarios.
+infant RSV exposure denominator. Figure 4 stress-tests the window ranking under
+uptake, first-week dosing, visit-delay, and age-censoring scenarios.
 
 The hospitalization translation uses the 100% uptake, otherwise-reference
 scenario and compares Early Sep-Mar, Late Oct-Apr, and Extended Sep-Apr with the
