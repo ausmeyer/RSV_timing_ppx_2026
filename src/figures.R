@@ -387,13 +387,11 @@ plot_ridgeline_seasons_by_agegroup <- function(nhsn_strata_df, nssp_outside) {
       scale_fill_manual(values = season_colours, guide = "none") +
       labs(
         x = "Out-of-window RSV activity (%)",
-        y = NULL,
-        title = wrap_title("NSSP out-of-window RSV ED visit fraction")
+        y = NULL
       ) +
       scale_x_continuous(limits = c(0, NA)) +
       theme_minimal() +
       theme(
-        plot.title = element_text(size = 11, face = "bold", lineheight = 1.05, margin = margin(b = 8)),
         axis.text = element_text(size = 9),
         panel.grid.minor = element_blank()
       )
@@ -671,17 +669,12 @@ plot_infant_ppx_fractional_protection <- function(
     coord_cartesian(ylim = c(0, y_max)) +
     labs(
       x = NULL,
-      y = "Median person-level fractional protection",
-      title = wrap_title(
-        paste0(source_label, ": infant protection by window definition", title_suffix),
-        width = 56
-      )
+      y = "Median person-level fractional protection"
     ) +
     theme_minimal(base_size = 11) +
     theme(
       panel.grid.major.x = element_blank(),
       panel.grid.minor = element_blank(),
-      plot.title = element_text(size = 10.5, face = "bold", lineheight = 1.05, margin = margin(b = 8)),
       axis.text.x = element_text(size = 9),
       axis.text.y = element_text(size = 9),
       axis.title.y = element_text(size = 9, margin = margin(r = 8)),
@@ -756,14 +749,12 @@ plot_infant_ppx_stress_test <- function(state_summary) {
     ) +
     labs(
       x = "Change vs Oct-Mar baseline (percentage points)",
-      y = NULL,
-      title = wrap_title("NSSP infant protection robustness across model assumptions")
+      y = NULL
     ) +
     theme_minimal(base_size = 11) +
     theme(
       panel.grid.major.y = element_blank(),
       panel.grid.minor = element_blank(),
-      plot.title = element_text(size = 11, face = "bold", lineheight = 1.05, margin = margin(b = 8)),
       strip.text = element_text(size = 9, face = "bold"),
       axis.text.x = element_text(size = 9),
       axis.text.y = element_text(size = 8),
@@ -851,12 +842,7 @@ plot_infant_hospitalizations_averted <- function(
     coord_cartesian(ylim = c(y_lower, y_upper)) +
     labs(
       x = NULL,
-      y = "Expected RSV hospitalizations averted per state",
-      title = wrap_title(paste0(
-        "NSSP-modeled hospitalizations averted: ",
-        comparison_label,
-        " vs Oct-Mar"
-      ), width = 54)
+      y = "Expected RSV hospitalizations averted per state"
     ) +
     theme_minimal(base_size = 11) +
     theme(
@@ -864,8 +850,7 @@ plot_infant_hospitalizations_averted <- function(
       panel.grid.minor = element_blank(),
       axis.text.x = element_text(size = 9),
       axis.text.y = element_text(size = 9),
-      axis.title.y = element_text(size = 9, margin = margin(r = 8)),
-      plot.title = element_text(size = 10.5, face = "bold", lineheight = 1.05, margin = margin(b = 8))
+      axis.title.y = element_text(size = 9, margin = margin(r = 8))
     )
 
   save_plot(p, figure_stub, width = 6.5, height = 5)
