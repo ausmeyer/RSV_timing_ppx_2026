@@ -426,19 +426,41 @@ plot_infant_ppx_window_advantage_forest <- function(stress_state) {
                   "October-April"   = "#9aa0a6",
                   "Year-round"      = "#e08a3c")
 
+  # Directional cues flanking the x = 0 line, placed below the tick labels and
+  # above the axis title. y = -Inf anchors to the bottom panel edge (robust to the
+  # reversed y-scale); vjust pushes the text down into the bottom margin, and
+  # clip = "off" lets it render outside the panel. Small x offsets (data units)
+  # keep each label on its side of the zero line.
+  x_pad <- 1.5
+  # Symmetric x-limits about 0 (span the widest whisker on either side).
+  x_max <- max(abs(c(agg$lo, agg$hi)), na.rm = TRUE) * 1.05
   p <- ggplot(agg, aes(x = med, y = ypos, color = window)) +
     geom_vline(xintercept = 0, color = "grey60") +
     geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0, show.legend = FALSE) +
-    geom_point(size = 2.4) +
+    geom_point(size = 1.5) +
     scale_y_reverse(breaks = seq_along(ordered_ids), labels = level_labels) +
     scale_color_manual(values = win_colors, breaks = present_windows) +
-    labs(x = "Advantage over October-March baseline (percentage points)",
+    coord_cartesian(clip = "off", xlim = c(-x_max, x_max)) +
+    annotate("text", x = -x_pad, y = -Inf, hjust = 1, vjust = 59,
+             label = "← worse protection than baseline",
+             size = 3.2, fontface = "italic", color = "grey35") +
+    annotate("text", x = x_pad, y = -Inf, hjust = 0, vjust = 59,
+             label = "better protection than baseline →",
+             size = 3.2, fontface = "italic", color = "grey35") +
+    labs(x = "Difference from October-March baseline (percentage points)",
          y = NULL, color = NULL) +
     theme_minimal(base_size = 13) +
     theme(
       panel.grid.minor = element_blank(),
       panel.grid.major.x = element_blank(),
-      legend.position = "top", legend.justification = "right"
+      # Float the legend at the top-right of the panel so it can be moved down
+      # freely by lowering the y in legend.position (panel coords: 1 = top,
+      # 0 = bottom) without adding any top margin/whitespace.
+      legend.position = c(0.995, 1.08),
+      legend.justification = c(1, 1),
+      legend.direction = "horizontal",
+      axis.title.x = element_text(vjust = -4),
+      plot.margin = margin(t = 20, r = 14, b = 26, l = 5)
     )
 
   save_plot(p, "fig3_infant_ppx_september_vs_april_advantage", width = 8, height = 6)
