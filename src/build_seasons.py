@@ -14,7 +14,7 @@ import yaml
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -360,9 +360,7 @@ def build_seasons(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         Fully processed DataFrame
     """
-    logger.info("=" * 50)
     logger.info("BUILDING SEASONS")
-    logger.info("=" * 50)
 
     # Step 1: Assign seasons
     logger.info("\n1. Normalizing jurisdiction names...")
@@ -398,10 +396,8 @@ def build_seasons(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("\n7. Adding state flags (Southeast, comparator)...")
     df = add_state_flags(df)
 
-    logger.info("=" * 50)
     logger.info("SEASON BUILDING COMPLETE")
     logger.info(f"Final shape: {df.shape}")
-    logger.info("=" * 50)
 
     return df
 

@@ -1,5 +1,5 @@
 """
-Burden analysis module — 2025-26 season extension.
+Burden analysis module - 2025-26 season extension.
 
 Computes:
 1. Outside fraction (burden outside Oct-Mar window)
@@ -20,7 +20,7 @@ import pandas as pd
 import yaml
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -80,12 +80,10 @@ def compute_outside_fraction(
 
     df_result = pd.DataFrame(results)
 
-    logger.info("=" * 50)
     logger.info("OUTSIDE FRACTION ANALYSIS")
-    logger.info("=" * 50)
     logger.info(f"Computed for {len(df_result)} state-season combinations")
     logger.info(f"Median outside fraction: {df_result['outside_fraction'].median():.3f}")
-    logger.info(f"Range: {df_result['outside_fraction'].min():.3f} – {df_result['outside_fraction'].max():.3f}")
+    logger.info(f"Range: {df_result['outside_fraction'].min():.3f} - {df_result['outside_fraction'].max():.3f}")
 
     return df_result
 
@@ -151,9 +149,7 @@ def compute_material_activity(
 
     df_result = pd.DataFrame(results)
 
-    logger.info("=" * 50)
     logger.info(f"MATERIAL ACTIVITY ANALYSIS (threshold={threshold})")
-    logger.info("=" * 50)
     logger.info(f"Median material weeks outside: {df_result['material_weeks_outside'].median():.1f}")
     logger.info(
         f"Median material burden outside fraction: "
@@ -175,16 +171,14 @@ def evaluate_extended_windows(
     Evaluate coverage under different window definitions.
 
     Windows:
-    - baseline_oct_mar: Oct 1 – Mar 31
-    - early_sep_mar:    Sep 1 – Mar 31
-    - late_oct_apr:     Oct 1 – Apr 30
-    - extended_sep_apr: Sep 1 – Apr 30
+    - baseline_oct_mar: Oct 1 - Mar 31
+    - early_sep_mar:    Sep 1 - Mar 31
+    - late_oct_apr:     Oct 1 - Apr 30
     """
     windows = {
         "baseline_oct_mar": {"start_month": 10, "start_day": 1, "end_month": 3, "end_day": 31},
         "early_sep_mar":    {"start_month": 9,  "start_day": 1, "end_month": 3, "end_day": 31},
         "late_oct_apr":     {"start_month": 10, "start_day": 1, "end_month": 4, "end_day": 30},
-        "extended_sep_apr": {"start_month": 9,  "start_day": 1, "end_month": 4, "end_day": 30},
     }
 
     df_valid = df[df[value_col].notna()].copy()
@@ -219,9 +213,7 @@ def evaluate_extended_windows(
 
     df_result = pd.DataFrame(results)
 
-    logger.info("=" * 50)
     logger.info("EXTENDED WINDOW EVALUATION")
-    logger.info("=" * 50)
     for window_name in windows:
         subset = df_result[df_result["window_name"] == window_name]
         logger.info(
@@ -274,9 +266,7 @@ def compute_national_summary(
 
     df_result = pd.DataFrame(results)
 
-    logger.info("=" * 50)
     logger.info("NATIONAL SUMMARY")
-    logger.info("=" * 50)
     for _, row in df_result.iterrows():
         logger.info(
             f"  {row['season']}: weighted outside={row['national_outside_fraction_weighted']:.3f}, "
@@ -486,9 +476,7 @@ def compute_longitudinal_consistency(
     for col, val in corr_cols.items():
         df_jur[col] = val
 
-    logger.info("=" * 50)
     logger.info("LONGITUDINAL CONSISTENCY")
-    logger.info("=" * 50)
     logger.info(f"Jurisdictions assessed: {len(df_jur)}")
     logger.info(f"Median CV: {df_jur['cv_outside_fraction'].median():.3f}")
 
@@ -533,10 +521,8 @@ def run_burden_analysis(
     if age_group_label is None:
         age_group_label = value_col
 
-    logger.info("\n" + "=" * 60)
     logger.info("RUNNING BURDEN ANALYSIS")
     logger.info(f"Datasource: {datasource} | Outcome: {value_col}")
-    logger.info("=" * 60 + "\n")
 
     outside_fraction = compute_outside_fraction(df, value_col=value_col)
     material_activity = compute_material_activity(df, value_col=value_col,
@@ -580,14 +566,7 @@ def main():
 
     df_raw = load_cached_or_fetch()
     df = build_seasons(df_raw)
-    results = run_burden_analysis(df)
-
-    national = results["national_summary"]
-    for _, row in national.iterrows():
-        print(f"\n{row['season']}:")
-        print(f"  Weighted outside fraction: {row['national_outside_fraction_weighted']:.1%}")
-
-    return results
+    return run_burden_analysis(df)
 
 
 if __name__ == "__main__":

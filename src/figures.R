@@ -1,18 +1,13 @@
 #!/usr/bin/env Rscript
 #
-# figures.R — 2025-26 Season Extension
+# figures.R - RSV prophylaxis timing analysis
 #
-# Generates publication figures:
-#   Figure 1: State choropleth grid (3 NSSP + available NHSN panels)
-#   Figure 2: Ridgeline density plots by season and age group (ggridges)
-#             - Layout A: seasons as ridgelines, faceted by age group
-#             - Layout B: age groups as ridgelines, faceted by season
-#   Figure 3: Realistic-delivery infant prophylaxis fractional protection
-#             with 12-month exposure censor
-#   Figure 4: Realistic-delivery infant prophylaxis fractional protection
-#             with 8-month exposure censor
-#   Figure 5: Robustness of window gains across delivery/model assumptions
-#   Supplementary: State-level time series
+# Generates the publication figures:
+#   Figure 1: choropleth grid of out-of-window RSV fraction
+#   Figure 2: ridgeline densities by season and age group
+#   Figure 3: window advantage over Oct-March baseline across stress-test scenarios
+#   Figure 4: national hospitalizations averted, primary model vs 100% uptake
+#   Supplementary: state-level time series
 #
 
 # =============================================================================
@@ -25,7 +20,6 @@ suppressPackageStartupMessages({
   library(lubridate)
 })
 
-has_cowplot <- requireNamespace("cowplot",  quietly = TRUE)
 has_sf      <- requireNamespace("sf",       quietly = TRUE)
 has_maps    <- requireNamespace("maps",     quietly = TRUE)
 has_ridges  <- requireNamespace("ggridges", quietly = TRUE)
@@ -36,70 +30,7 @@ fig_dir <- file.path(root, "results", "figures")
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
 config <- yaml::read_yaml(file.path(root, "config.yaml"))
-write_regional_plots <- isTRUE(config$output$write_regional_plots)
 
-remove_stale_default_figures <- function() {
-  stale <- c(
-    "nssp_fig3_coverage_ribbon.png",
-    "nssp_fig3_coverage_ribbon.pdf",
-    "nssp_fig3_coverage_with_ci.png",
-    "nssp_fig3_coverage_with_ci.pdf",
-    "nhsn_fig3_coverage_ribbon.png",
-    "nhsn_fig3_coverage_ribbon.pdf",
-    "nhsn_fig3_coverage_with_ci.png",
-    "nhsn_fig3_coverage_with_ci.pdf",
-    "nssp_fig4_infant_ppx_fractional_protection.png",
-    "nssp_fig4_infant_ppx_fractional_protection.pdf",
-    "nhsn_fig4_infant_ppx_fractional_protection.png",
-    "nhsn_fig4_infant_ppx_fractional_protection.pdf",
-    "nssp_fig5_infant_ppx_9mo_fractional_protection.png",
-    "nssp_fig5_infant_ppx_9mo_fractional_protection.pdf",
-    "nhsn_fig5_infant_ppx_9mo_fractional_protection.png",
-    "nhsn_fig5_infant_ppx_9mo_fractional_protection.pdf",
-    "nssp_fig6_infant_ppx_realistic_delivery_fractional_protection.png",
-    "nssp_fig6_infant_ppx_realistic_delivery_fractional_protection.pdf",
-    "nhsn_fig6_infant_ppx_realistic_delivery_fractional_protection.png",
-    "nhsn_fig6_infant_ppx_realistic_delivery_fractional_protection.pdf",
-    "nssp_fig7_infant_ppx_realistic_delivery_8mo_censor_fractional_protection.png",
-    "nssp_fig7_infant_ppx_realistic_delivery_8mo_censor_fractional_protection.pdf",
-    "nhsn_fig7_infant_ppx_realistic_delivery_8mo_censor_fractional_protection.png",
-    "nhsn_fig7_infant_ppx_realistic_delivery_8mo_censor_fractional_protection.pdf",
-    "nssp_fig6_infant_ppx_efficacy_weighted_fractional_protection.png",
-    "nssp_fig6_infant_ppx_efficacy_weighted_fractional_protection.pdf",
-    "nhsn_fig6_infant_ppx_efficacy_weighted_fractional_protection.png",
-    "nhsn_fig6_infant_ppx_efficacy_weighted_fractional_protection.pdf",
-    "nssp_fig7_infant_ppx_8mo_censor_fractional_protection.png",
-    "nssp_fig7_infant_ppx_8mo_censor_fractional_protection.pdf",
-    "nhsn_fig7_infant_ppx_8mo_censor_fractional_protection.png",
-    "nhsn_fig7_infant_ppx_8mo_censor_fractional_protection.pdf",
-    "fig5_infant_ppx_stress_test_window_gains.png",
-    "fig5_infant_ppx_stress_test_window_gains.pdf",
-    "combined_fig5_infant_ppx_stress_test_window_gains.png",
-    "combined_fig5_infant_ppx_stress_test_window_gains.pdf",
-    "nssp_infant_ppx_hospitalizations_averted_early_vs_baseline.png",
-    "nssp_infant_ppx_hospitalizations_averted_early_vs_baseline.pdf",
-    "nssp_infant_ppx_hospitalizations_averted_late_vs_baseline.png",
-    "nssp_infant_ppx_hospitalizations_averted_late_vs_baseline.pdf",
-    "nssp_infant_ppx_hospitalizations_averted_extended_vs_baseline.png",
-    "nssp_infant_ppx_hospitalizations_averted_extended_vs_baseline.pdf"
-  )
-
-  if (!write_regional_plots) {
-    stale <- c(
-      stale,
-      "nssp_fig_supp_regional_choropleth.png",
-      "nssp_fig_supp_regional_choropleth.pdf",
-      "nhsn_fig_supp_regional_choropleth.png",
-      "nhsn_fig_supp_regional_choropleth.pdf",
-      "nssp_fig_supp_regional_ridgeline.png",
-      "nssp_fig_supp_regional_ridgeline.pdf",
-      "nhsn_fig_supp_regional_ridgeline.png",
-      "nhsn_fig_supp_regional_ridgeline.pdf"
-    )
-  }
-
-  unlink(file.path(fig_dir, stale))
-}
 
 # =============================================================================
 # UTILITY
@@ -124,16 +55,6 @@ normalize_state_names <- function(x) {
   x
 }
 
-outside_fraction_label <- function(metric_label, prefix = "Fraction") {
-  base <- if (!is.null(metric_label) && !is.na(metric_label) && metric_label != "") {
-    metric_label
-  } else {
-    "RSV activity"
-  }
-  if (str_detect(tolower(prefix), "median"))
-    return(sprintf("Median fraction of %s outside window", base))
-  sprintf("Fraction of %s outside window", base)
-}
 
 save_plot <- function(plot, filename, width = 10, height = 6) {
   ggsave(file.path(fig_dir, paste0(filename, ".png")),
@@ -190,14 +111,7 @@ read_processed <- function(prefix) {
   stop(paste("Processed data not found for", prefix))
 }
 
-get_states_sf <- function() {
-  if (!has_maps || !has_sf) {
-    message("Skipping choropleth: 'maps' or 'sf' not installed.")
-    return(NULL)
-  }
-  mp <- maps::map("state", plot = FALSE, fill = TRUE)
-  sf_obj <- sf::st_as_sf(mp) |>
-    mutate(jurisdiction = normalize_state_names(ID))
+rename_geometry <- function(sf_obj) {
   geom_col <- attr(sf_obj, "sf_column")
   if (!identical(geom_col, "geometry")) {
     names(sf_obj)[names(sf_obj) == geom_col] <- "geometry"
@@ -206,13 +120,44 @@ get_states_sf <- function() {
   sf_obj
 }
 
+# State geometry for the choropleths. Prefer tigris, which includes Alaska and
+# Hawaii repositioned as insets via shift_geometry(); fall back to the lower-48
+# maps package if tigris is unavailable. Both are returned already projected
+# (ESRI:102003), so the plot displays them with coord_sf(datum = NA).
+get_states_sf <- function() {
+  if (!has_sf) {
+    message("Skipping choropleth: 'sf' not installed.")
+    return(NULL)
+  }
+  keep <- c(state.name, "District of Columbia")
+
+  if (requireNamespace("tigris", quietly = TRUE)) {
+    options(tigris_use_cache = TRUE)
+    states <- tryCatch({
+      st <- suppressMessages(tigris::states(cb = TRUE, resolution = "20m", year = 2022))
+      st <- st[st$NAME %in% keep, ]
+      st <- tigris::shift_geometry(st)            # Alaska/Hawaii as insets
+      mutate(st, jurisdiction = normalize_state_names(NAME))
+    }, error = function(e) NULL)
+    if (!is.null(states)) return(rename_geometry(states))
+  }
+
+  if (!has_maps) {
+    message("Skipping choropleth: install 'tigris' or 'maps'.")
+    return(NULL)
+  }
+  mp <- maps::map("state", plot = FALSE, fill = TRUE)
+  sf_obj <- sf::st_as_sf(mp) |>
+    mutate(jurisdiction = normalize_state_names(ID))
+  sf::st_crs(sf_obj) <- 4326
+  sf_obj <- sf::st_transform(sf_obj, "ESRI:102003")
+  rename_geometry(sf_obj)
+}
+
 # =============================================================================
 # THEME
 # =============================================================================
 
-base_theme <- function() {
-  if (has_cowplot) cowplot::theme_minimal_grid() else theme_minimal()
-}
 
 choropleth_theme <- function() {
   theme_void() +
@@ -234,7 +179,7 @@ choropleth_theme <- function() {
 plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_label) {
   states_sf <- get_states_sf()
   if (is.null(states_sf)) {
-    message("Skipping choropleth grid — sf/maps unavailable.")
+    message("Skipping choropleth grid: sf/maps unavailable.")
     return(invisible(NULL))
   }
 
@@ -286,7 +231,7 @@ plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_la
 
   p <- ggplot(joined) +
     geom_sf(aes(fill = outside_fraction), color = "gray70", linewidth = 0.15) +
-    coord_sf(crs = "ESRI:102003", datum = NA) +
+    coord_sf(datum = NA) +
     facet_grid(source ~ season, drop = FALSE) +
     scale_fill_gradient(
       low = "#fee5d9", high = "#a50f15",
@@ -316,11 +261,11 @@ plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_la
 # FIGURE 2: Ridgeline density plots
 # =============================================================================
 
-# Layout A — seasons as ridgelines, one facet per NHSN age group.
+# Seasons as ridgelines, one facet per NHSN age group.
 # An additional single-panel plot is made for NSSP (all-ages only).
 plot_ridgeline_seasons_by_agegroup <- function(nhsn_strata_df, nssp_outside) {
   if (!has_ridges) {
-    message("Skipping ridgeline plots — ggridges not installed.")
+    message("Skipping ridgeline plots: ggridges not installed.")
     return(invisible(NULL))
   }
   library(ggridges)
@@ -388,6 +333,9 @@ plot_ridgeline_seasons_by_agegroup <- function(nhsn_strata_df, nssp_outside) {
         y = NULL
       ) +
       scale_x_continuous(limits = c(0, NA)) +
+      # Extra headroom above the top ridge so it is not clipped.
+      scale_y_discrete(expand = expansion(add = c(0.2, 1.6))) +
+      coord_cartesian(clip = "off") +
       theme_minimal() +
       theme(
         axis.text = element_text(size = 9),
@@ -398,460 +346,229 @@ plot_ridgeline_seasons_by_agegroup <- function(nhsn_strata_df, nssp_outside) {
   }
 }
 
-# Layout B — age groups as ridgelines, faceted by season.
-plot_ridgeline_agegroups_by_season <- function(nhsn_strata_df) {
-  if (!has_ridges || is.null(nhsn_strata_df) || nrow(nhsn_strata_df) == 0) {
-    return(invisible(NULL))
-  }
-  library(ggridges)
-
-  if (!"age_group_label" %in% names(nhsn_strata_df)) return(invisible(NULL))
-
-  df <- nhsn_strata_df |>
-    filter(!is.na(season), !is.na(outside_fraction)) |>
-    mutate(
-      pct = outside_fraction * 100,
-      age_group_label = factor(age_group_label,
-                               levels = rev(unique(age_group_label)))
-    )
-
-  p <- ggplot(df, aes(x = pct, y = age_group_label, fill = age_group_label)) +
-    stat_density_ridges(
-      quantile_lines = TRUE, quantiles = 2,
-      alpha = 0.8, bandwidth = 1.5,
-      jittered_points = TRUE,
-      point_shape = "|", point_size = 1.5, point_alpha = 0.6,
-      position = position_points_jitter(height = 0)
-    ) +
-    scale_fill_brewer(palette = "Set2", guide = "none") +
-    facet_wrap(~season) +
-    labs(
-      x = "Out-of-window RSV activity (%)",
-      y = NULL,
-      title = wrap_title("NHSN: out-of-window RSV fractions by age group and season")
-    ) +
-    scale_x_continuous(limits = c(0, NA)) +
-    theme_minimal() +
-    theme(
-      strip.text = element_text(size = 9, face = "bold"),
-      plot.title = element_text(size = 11, face = "bold", lineheight = 1.05, margin = margin(b = 8)),
-      axis.text  = element_text(size = 8),
-      panel.grid.minor = element_blank()
-    )
-
-  n_seasons <- n_distinct(df$season)
-  save_plot(p, "fig2_ridgeline_nhsn_agegroups_by_season",
-            width = 5 * min(n_seasons, 3), height = 4)
-  invisible(p)
-}
-
-# =============================================================================
-# FIGURE 3: Coverage comparison — violin + jitter + CI
-# =============================================================================
-# X-axis: window definitions ordered narrowest → widest.
-# Each season/window violin shows the state-level coverage distribution. Jittered
-# points are states; black points and intervals show the median and bootstrap
-# 95% CI, or IQR fallback if bootstrap results are unavailable.
-
-plot_coverage_comparison_with_ci <- function(
-    extended_df, bootstrap_ci_df, prefix,
-    source_label = "NSSP"
-) {
-  # Ordered window labels (narrowest → widest)
-  window_order <- c("Baseline\nOct–Mar", "Early\nSep–Mar",
-                    "Late\nOct–Apr", "Extended\nSep–Apr")
-
-  metric_to_window <- c(
-    median_coverage_baseline_oct_mar = "Baseline\nOct–Mar",
-    median_coverage_early_sep_mar    = "Early\nSep–Mar",
-    median_coverage_late_oct_apr     = "Late\nOct–Apr",
-    median_coverage_extended_sep_apr = "Extended\nSep–Apr"
-  )
-  window_name_to_label <- c(
-    baseline_oct_mar = "Baseline\nOct–Mar",
-    early_sep_mar    = "Early\nSep–Mar",
-    late_oct_apr     = "Late\nOct–Apr",
-    extended_sep_apr = "Extended\nSep–Apr"
-  )
-
-  # --- Assemble state-level coverage values ---
-  ext_values <- extended_df |>
-    filter(!is.na(coverage)) |>
-    mutate(window = window_name_to_label[window_name]) |>
-    filter(!is.na(window)) |>
-    select(season, jurisdiction, window, coverage)
-
-  values_df <- ext_values |>
-    mutate(
-      window = factor(window, levels = window_order),
-      season = factor(season, levels = sort(unique(season)))
-    )
-
-  # --- Assemble point estimates and intervals ---
-  ext_summary <- values_df |>
-    group_by(season, window) |>
-    summarise(
-      point = median(coverage, na.rm = TRUE),
-      q25   = quantile(coverage, 0.25, na.rm = TRUE),
-      q75   = quantile(coverage, 0.75, na.rm = TRUE),
-      .groups = "drop"
-    )
-
-  df <- ext_summary |> select(season, window, point, q25, q75)
-
-  # --- Substitute bootstrap CIs where available ---
-  if (!is.null(bootstrap_ci_df) && nrow(bootstrap_ci_df) > 0) {
-    ci_wide <- bootstrap_ci_df |>
-      filter(metric %in% names(metric_to_window)) |>
-      mutate(window = metric_to_window[metric]) |>
-      select(season, window, ci_lower, ci_upper)
-
-    df <- df |>
-      left_join(ci_wide, by = c("season", "window")) |>
-      mutate(
-        lo = coalesce(ci_lower, q25),
-        hi = coalesce(ci_upper, q75)
-      )
-  } else {
-    df <- df |> mutate(lo = q25, hi = q75)
-  }
-
-  df <- df |>
-    mutate(
-      window = factor(window, levels = window_order),
-      season = factor(season, levels = sort(unique(season)))
-    )
-
-  values_df <- values_df |>
-    filter(!is.na(window), !is.na(season), !is.na(coverage))
-
-  y_lo <- floor(min(values_df$coverage, df$lo, na.rm = TRUE) * 20) / 20
-  y_hi <- 1.0
-
-  dodge <- position_dodge(width = 0.78)
-
-  p <- ggplot(values_df, aes(x = window, y = coverage, fill = season)) +
-    geom_violin(
-      aes(group = interaction(window, season)),
-      alpha = 0.22, color = NA, scale = "width", trim = FALSE,
-      position = dodge
-    ) +
-    geom_point(
-      aes(color = season, group = season),
-      position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.78),
-      size = 1.4, alpha = 0.35, stroke = 0
-    ) +
-    geom_errorbar(
-      data = df,
-      aes(x = window, ymin = lo, ymax = hi, group = season),
-      inherit.aes = FALSE,
-      width = 0.12, color = "black", linewidth = 0.45,
-      position = dodge
-    ) +
-    geom_point(
-      data = df,
-      aes(x = window, y = point, group = season),
-      inherit.aes = FALSE,
-      color = "black", fill = "white", shape = 21, size = 2.2,
-      position = dodge
-    ) +
-    scale_color_manual(values = season_colours, name = "Season",
-                       guide = guide_legend(override.aes = list(alpha = 1, size = 2.5))) +
-    scale_fill_manual(values  = season_colours, guide = "none") +
-    scale_y_continuous(
-      breaks = seq(0, 1, 0.05),
-      labels = scales::percent_format(accuracy = 1),
-      expand = expansion(mult = c(0.02, 0.02))
-    ) +
-    coord_cartesian(ylim = c(y_lo, y_hi)) +
-    labs(
-      x     = NULL,
-      y     = "State coverage (% of RSV burden captured)",
-      title = wrap_title(paste0(source_label,
-                     ": coverage by window definition"))
-    ) +
-    theme_minimal(base_size = 11) +
-    theme(
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor   = element_blank(),
-      strip.text         = element_text(size = 9, face = "bold"),
-      plot.title         = element_text(size = 11, face = "bold", lineheight = 1.05, margin = margin(b = 8)),
-      axis.text.x        = element_text(size = 9),
-      axis.text.y        = element_text(size = 9),
-      axis.title.y       = element_text(size = 9, margin = margin(r = 8)),
-      legend.position    = "bottom",
-      legend.title       = element_text(size = 9),
-      legend.text        = element_text(size = 9)
-    )
-
-  save_plot(p, paste0(prefix, "fig3_coverage_with_ci"), width = 7, height = 5)
-  invisible(p)
-}
 
 # =============================================================================
 # SUPPLEMENTARY: State-level time series
 # =============================================================================
 
-plot_infant_ppx_fractional_protection <- function(
-    summary_df, prefix, source_label = "NSSP",
-    figure_stub = "fig3_infant_ppx_realistic_delivery_fractional_protection",
-    title_suffix = "",
-    y_max = 1.0
-) {
-  if (is.null(summary_df) || nrow(summary_df) == 0) return(invisible(NULL))
 
-  window_order <- c("Baseline\nOct–Mar", "Early\nSep–Mar",
-                    "Late\nOct–Apr", "Extended\nSep–Apr")
-  window_name_to_label <- c(
-    baseline_oct_mar = "Baseline\nOct–Mar",
-    early_sep_mar    = "Early\nSep–Mar",
-    late_oct_apr     = "Late\nOct–Apr",
-    extended_sep_apr = "Extended\nSep–Apr"
-  )
+# Revision Figure 3: protection advantage of each broadened window (September-
+# March, October-April, year-round) over the October-March baseline, shown as a
+# dot-and-whisker forest across stress-test scenarios (median and IQR).
+plot_infant_ppx_window_advantage_forest <- function(stress_state) {
+  if (is.null(stress_state) || nrow(stress_state) == 0) return(invisible(NULL))
 
-  values_df <- summary_df |>
-    mutate(
-      window = window_name_to_label[window_name],
-      season = factor(season, levels = sort(unique(season))),
-      person_protection = median_person_activity_fractional_protection
+  wide <- stress_state |>
+    filter(
+      datasource == "nssp",
+      window_name %in% c("baseline_oct_mar", "early_sep_mar",
+                         "late_oct_apr", "year_round")
     ) |>
-    filter(!is.na(window), !is.na(season), !is.na(person_protection)) |>
-    mutate(window = factor(window, levels = window_order))
-
-  if (nrow(values_df) == 0) return(invisible(NULL))
-
-  summary_points <- values_df |>
-    group_by(season, window) |>
-    summarise(
-      point = median(person_protection, na.rm = TRUE),
-      q25 = quantile(person_protection, 0.25, na.rm = TRUE),
-      q75 = quantile(person_protection, 0.75, na.rm = TRUE),
-      .groups = "drop"
-    )
-
-  dodge <- position_dodge(width = 0.78)
-
-  p <- ggplot(values_df, aes(x = window, y = person_protection, fill = season)) +
-    geom_violin(
-      aes(group = interaction(window, season)),
-      alpha = 0.22, color = NA, scale = "width", trim = FALSE,
-      position = dodge
-    ) +
-    geom_point(
-      aes(color = season, group = season),
-      position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.78),
-      size = 1.4, alpha = 0.35, stroke = 0
-    ) +
-    geom_errorbar(
-      data = summary_points,
-      aes(x = window, ymin = q25, ymax = q75, group = season),
-      inherit.aes = FALSE,
-      width = 0.12, color = "black", linewidth = 0.45,
-      position = dodge
-    ) +
-    geom_point(
-      data = summary_points,
-      aes(x = window, y = point, group = season),
-      inherit.aes = FALSE,
-      color = "black", fill = "white", shape = 21, size = 2.2,
-      position = dodge
-    ) +
-    scale_color_manual(values = season_colours, name = "Season",
-                       guide = guide_legend(override.aes = list(alpha = 1, size = 2.5))) +
-    scale_fill_manual(values = season_colours, guide = "none") +
-    scale_y_continuous(
-      breaks = seq(0, y_max, 0.05),
-      labels = scales::percent_format(accuracy = 1),
-      expand = expansion(mult = c(0.02, 0.02))
-    ) +
-    coord_cartesian(ylim = c(0, y_max)) +
-    labs(
-      x = NULL,
-      y = "Median person-level fractional protection"
-    ) +
-    theme_minimal(base_size = 11) +
-    theme(
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor = element_blank(),
-      axis.text.x = element_text(size = 9),
-      axis.text.y = element_text(size = 9),
-      axis.title.y = element_text(size = 9, margin = margin(r = 8)),
-      legend.position = "bottom",
-      legend.title = element_text(size = 9),
-      legend.text = element_text(size = 9)
-    )
-
-  save_plot(p, paste0(prefix, figure_stub), width = 7, height = 5)
-  invisible(p)
-}
-
-plot_infant_ppx_stress_test <- function(state_summary) {
-  if (is.null(state_summary) || nrow(state_summary) == 0) return(invisible(NULL))
-
-  window_labels <- c(
-    early_sep_mar = "Early (Sep-Mar)",
-    late_oct_apr = "Late (Oct-Apr)",
-    extended_sep_apr = "Extended (Sep-Apr)"
-  )
-  df <- state_summary |>
-    filter(datasource == "nssp") |>
-    filter(!str_detect(scenario_id, "^efficacy_binary_")) |>
-    filter(window_name %in% c("baseline_oct_mar", names(window_labels))) |>
     select(
-      datasource, season, jurisdiction, scenario_id, scenario_order,
-      scenario_label, window_name, median_person_activity_fractional_protection
+      scenario_id, scenario_order, season, jurisdiction, window_name,
+      population_activity_weighted_protection
     ) |>
     pivot_wider(
       names_from = window_name,
-      values_from = median_person_activity_fractional_protection
+      values_from = population_activity_weighted_protection
     ) |>
-    pivot_longer(
-      cols = all_of(names(window_labels)),
-      names_to = "window_name",
-      values_to = "person_protection"
+    filter(!is.na(baseline_oct_mar))
+
+  if (nrow(wide) == 0) return(invisible(NULL))
+
+  window_levels <- c("September-March", "October-April", "Year-round")
+  window_cols   <- c("September-March" = "early_sep_mar",
+                     "October-April"   = "late_oct_apr",
+                     "Year-round"      = "year_round")
+  parts <- list()
+  for (wl in window_levels) {
+    col <- window_cols[[wl]]
+    if (col %in% names(wide)) {
+      parts[[length(parts) + 1]] <- wide |>
+        filter(!is.na(.data[[col]])) |>
+        transmute(scenario_id, scenario_order, window = wl,
+                  advantage = (.data[[col]] - baseline_oct_mar) * 100)
+    }
+  }
+  long <- bind_rows(parts)
+  if (nrow(long) == 0) return(invisible(NULL))
+
+  agg <- long |>
+    group_by(scenario_id, scenario_order, window) |>
+    summarise(
+      med = median(advantage),
+      lo  = quantile(advantage, 0.25),
+      hi  = quantile(advantage, 0.75),
+      .groups = "drop"
     ) |>
-    filter(!is.na(baseline_oct_mar), !is.na(person_protection)) |>
-    mutate(
-      window = recode(window_name, !!!window_labels),
-      window = factor(window, levels = rev(unname(window_labels))),
-      scenario_label = str_wrap(scenario_label, width = 44),
-      scenario_label = fct_reorder(scenario_label, scenario_order, .fun = min),
-      scenario_label = fct_rev(scenario_label),
-      delta_pp = (person_protection - baseline_oct_mar) * 100
-    )
+    arrange(scenario_order)
 
-  if (nrow(df) == 0) return(invisible(NULL))
+  labels_map <- c(
+    reference_12mo = "Primary Model", censor_8mo = "8-mo censor",
+    uptake_50 = "Uptake 50%", uptake_75 = "Uptake 75%", uptake_100 = "Uptake 100%",
+    newborn_first_week_20 = "First-week 20%", newborn_first_week_60 = "First-week 60%",
+    visit_delay_0 = "No visit delay", visit_delay_30 = "30-day visit delay",
+    waning_rapid = "Rapid waning"
+  )
+  lab_for <- function(id) { l <- unname(labels_map[id]); ifelse(is.na(l), id, l) }
+  ordered_ids  <- unique(agg$scenario_id)            # already in scenario_order
+  level_labels <- vapply(ordered_ids, lab_for, character(1))
 
-  p <- ggplot(df, aes(x = delta_pp, y = scenario_label, fill = window)) +
-    geom_vline(xintercept = 0, linewidth = 0.4, color = "grey55") +
-    geom_boxplot(
-      aes(group = interaction(scenario_label, window)),
-      position = position_dodge2(width = 0.72, preserve = "single"),
-      width = 0.52,
-      alpha = 0.75,
-      outlier.shape = NA,
-      outlier.size = 0.7,
-      linewidth = 0.35
-    ) +
-    scale_fill_manual(
-      values = c(
-        "Early (Sep-Mar)" = "#1b9e77",
-        "Late (Oct-Apr)" = "#d95f02",
-        "Extended (Sep-Apr)" = "#7570b3"
-      ),
-      breaks = unname(window_labels),
-      name = NULL,
-      guide = guide_legend(
-        override.aes = list(shape = 22, size = 4, linetype = 0, alpha = 1)
-      )
-    ) +
-    labs(
-      x = "Change vs Oct-Mar baseline (percentage points)",
-      y = NULL
-    ) +
-    theme_minimal(base_size = 11) +
+  present_windows <- window_levels[window_levels %in% unique(agg$window)]
+  agg$window <- factor(agg$window, levels = present_windows)
+  # Manual vertical offset so the windows do not overlap within a scenario.
+  n_w <- length(present_windows)
+  offsets <- if (n_w > 1) seq(-0.24, 0.24, length.out = n_w) else 0
+  names(offsets) <- present_windows
+  agg$ypos <- match(agg$scenario_id, ordered_ids) + offsets[as.character(agg$window)]
+
+  win_colors <- c("September-March" = "#1b6ca8",
+                  "October-April"   = "#9aa0a6",
+                  "Year-round"      = "#e08a3c")
+
+  p <- ggplot(agg, aes(x = med, y = ypos, color = window)) +
+    geom_vline(xintercept = 0, color = "grey60") +
+    geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0, show.legend = FALSE) +
+    geom_point(size = 2.4) +
+    scale_y_reverse(breaks = seq_along(ordered_ids), labels = level_labels) +
+    scale_color_manual(values = win_colors, breaks = present_windows) +
+    labs(x = "Advantage over October-March baseline (percentage points)",
+         y = NULL, color = NULL) +
+    theme_minimal(base_size = 13) +
     theme(
-      panel.grid.major.y = element_blank(),
       panel.grid.minor = element_blank(),
-      strip.text = element_text(size = 9, face = "bold"),
-      axis.text.x = element_text(size = 9),
-      axis.text.y = element_text(size = 8),
-      legend.position = c(0.98, 0.98),
-      legend.justification = c(1, 1),
-      legend.background = element_rect(fill = "white", color = "grey85", linewidth = 0.2),
-      legend.text = element_text(size = 9)
+      panel.grid.major.x = element_blank(),
+      legend.position = "top", legend.justification = "right"
     )
 
-  save_plot(p, "combined_infant_ppx_stress_test_window_gains", width = 9, height = 5.8)
+  save_plot(p, "fig3_infant_ppx_september_vs_april_advantage", width = 8, height = 6)
   invisible(p)
 }
 
-plot_infant_hospitalizations_averted <- function(
-    hosp_df,
-    figure_stub = "nssp_infant_ppx_hospitalizations_averted_early_vs_baseline"
-) {
-  if (is.null(hosp_df) || nrow(hosp_df) == 0) return(invisible(NULL))
+# Figure 4: per-state distribution of expected hospitalizations averted vs the
+# October-March baseline, by season, for three windows (September-March,
+# October-April, year-round) shown as grouped violins (100% uptake).
+plot_infant_hospitalizations_averted <- function(window_dfs, figure_stub) {
+  win_colors <- c("September-March" = "#1b6ca8",
+                  "October-April"   = "#9aa0a6",
+                  "Year-round"      = "#e08a3c")
 
-  values_df <- hosp_df |>
-    filter(
-      datasource == "nssp",
-      !is.na(season),
-      !is.na(coalesce(hospitalizations_averted_vs_baseline, hospitalizations_averted_early_vs_baseline))
-    ) |>
-    mutate(
-      season = factor(season, levels = sort(unique(season))),
-      hospitalizations_averted = coalesce(
-        hospitalizations_averted_vs_baseline,
-        hospitalizations_averted_early_vs_baseline
+  prep <- function(df, window_label) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    df |>
+      filter(datasource == "nssp", !is.na(season),
+             !is.na(coalesce(hospitalizations_averted_vs_baseline,
+                             hospitalizations_averted_early_vs_baseline))) |>
+      transmute(
+        season = season,
+        hosp = coalesce(hospitalizations_averted_vs_baseline,
+                        hospitalizations_averted_early_vs_baseline),
+        window = window_label
       )
-    )
+  }
+  values_df <- bind_rows(lapply(names(window_dfs),
+                                function(w) prep(window_dfs[[w]], w)))
+  if (is.null(values_df) || nrow(values_df) == 0) return(invisible(NULL))
 
-  if (nrow(values_df) == 0) return(invisible(NULL))
+  win_levels <- names(window_dfs)[names(window_dfs) %in% unique(values_df$window)]
+  values_df <- values_df |>
+    mutate(season = factor(season, levels = sort(unique(season))),
+           window = factor(window, levels = win_levels))
 
   summary_points <- values_df |>
-    group_by(season) |>
-    summarise(
-      point = median(hospitalizations_averted, na.rm = TRUE),
-      q25 = quantile(hospitalizations_averted, 0.25, na.rm = TRUE),
-      q75 = quantile(hospitalizations_averted, 0.75, na.rm = TRUE),
-      .groups = "drop"
-    )
+    group_by(season, window) |>
+    summarise(point = median(hosp, na.rm = TRUE),
+              q25 = quantile(hosp, 0.25, na.rm = TRUE),
+              q75 = quantile(hosp, 0.75, na.rm = TRUE),
+              .groups = "drop")
 
-  comparison_label <- if ("comparison_window_label" %in% names(values_df)) {
-    values_df |>
-      distinct(comparison_window_label) |>
-      pull(comparison_window_label) |>
-      first()
-  } else {
-    "Early Sep-Mar"
-  }
-  comparison_label <- default_or(comparison_label, "Alternative")
+  y_upper <- ceiling(max(values_df$hosp, na.rm = TRUE) / 5) * 5
+  y_lower <- min(-50, floor(min(values_df$hosp, na.rm = TRUE) / 5) * 5)
+  dodge <- position_dodge(width = 0.8)
 
-  y_lower <- -100
-  y_upper <- max(values_df$hospitalizations_averted, summary_points$q75, na.rm = TRUE)
-  y_upper <- ceiling(y_upper / 5) * 5
-  if (!is.finite(y_lower)) y_lower <- 0
-  if (!is.finite(y_upper) || y_upper <= y_lower) y_upper <- NA_real_
-
-  p <- ggplot(values_df, aes(x = season, y = hospitalizations_averted)) +
-    geom_violin(
-      fill = "#9CA3AF", alpha = 0.26, color = NA, scale = "width", trim = FALSE
-    ) +
-    geom_point(
-      position = position_jitter(width = 0.12, height = 0),
-      color = "#6B7280", size = 1.5, alpha = 0.48, stroke = 0
-    ) +
-    geom_errorbar(
-      data = summary_points,
-      aes(x = season, ymin = q25, ymax = q75),
-      inherit.aes = FALSE,
-      width = 0.12, color = "black", linewidth = 0.45
-    ) +
-    geom_point(
-      data = summary_points,
-      aes(x = season, y = point),
-      inherit.aes = FALSE,
-      color = "black", fill = "white", shape = 21, size = 2.2
-    ) +
-    scale_y_continuous(
-      breaks = scales::pretty_breaks(n = 6),
-      expand = expansion(mult = c(0.02, 0.04))
-    ) +
+  p <- ggplot(values_df, aes(x = season, y = hosp, fill = window)) +
+    geom_violin(position = dodge, width = 0.7, alpha = 0.5, color = NA,
+                scale = "width", trim = FALSE) +
+    geom_errorbar(data = summary_points,
+                  aes(x = season, ymin = q25, ymax = q75, group = window),
+                  inherit.aes = FALSE, position = dodge, width = 0.2,
+                  color = "black", linewidth = 0.4) +
+    geom_point(data = summary_points, aes(x = season, y = point, group = window),
+               inherit.aes = FALSE, position = dodge,
+               color = "black", fill = "white", shape = 21, size = 2) +
+    scale_fill_manual(values = win_colors, breaks = win_levels) +
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 6),
+                       expand = expansion(mult = c(0.02, 0.06))) +
     coord_cartesian(ylim = c(y_lower, y_upper)) +
-    labs(
-      x = NULL,
-      y = "Expected RSV hospitalizations averted per state"
-    ) +
+    labs(x = NULL, fill = NULL,
+         y = "Expected RSV hospitalizations averted per state\n(100% uptake)") +
     theme_minimal(base_size = 11) +
-    theme(
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor = element_blank(),
-      axis.text.x = element_text(size = 9),
-      axis.text.y = element_text(size = 9),
-      axis.title.y = element_text(size = 9, margin = margin(r = 8))
-    )
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor = element_blank(),
+          legend.position = "top", legend.justification = "right")
 
-  save_plot(p, figure_stub, width = 6.5, height = 5)
+  save_plot(p, figure_stub, width = 8, height = 5)
+  invisible(p)
+}
+
+# Figure 5: national hospitalizations averted vs the October-March baseline for
+# three windows (September-March, October-April, year-round), by season, as
+# stacked panels A (primary model) and B (100% uptake). Combined with cowplot.
+plot_infant_hospitalizations_averted_ab <- function(primary_dfs, full_dfs) {
+  if (!requireNamespace("cowplot", quietly = TRUE)) {
+    message("Skipping figure 5: cowplot not installed.")
+    return(invisible(NULL))
+  }
+  win_colors <- c("September-March" = "#1b6ca8",
+                  "October-April"   = "#9aa0a6",
+                  "Year-round"      = "#e08a3c")
+
+  averted_panel <- function(dfs, y_title) {
+    prep <- function(df, window_label) {
+      if (is.null(df) || nrow(df) == 0) return(NULL)
+      df |>
+        filter(datasource == "nssp", !is.na(season)) |>
+        transmute(
+          season = season,
+          hosp   = total_hospitalizations_averted_vs_baseline,
+          window = window_label
+        )
+    }
+    d <- bind_rows(lapply(names(dfs), function(w) prep(dfs[[w]], w)))
+    if (is.null(d) || nrow(d) == 0) return(NULL)
+    win_levels <- names(dfs)[names(dfs) %in% unique(d$window)]
+    d <- d |>
+      mutate(season = factor(season, levels = sort(unique(season))),
+             window = factor(window, levels = win_levels))
+
+    ggplot(d, aes(x = season, y = hosp, fill = window)) +
+      geom_col(position = position_dodge(0.75), width = 0.66) +
+      geom_text(aes(y = pmax(hosp, 0),
+                    label = formatC(hosp, format = "d", big.mark = ",")),
+                position = position_dodge(0.75), vjust = -0.4, size = 3) +
+      scale_fill_manual(values = win_colors, breaks = win_levels) +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.16))) +
+      labs(x = "Season", y = y_title, fill = NULL) +
+      theme_minimal(base_size = 12) +
+      theme(panel.grid.minor = element_blank(),
+            panel.grid.major.x = element_blank())
+  }
+
+  p_a <- averted_panel(primary_dfs, "National hospitalizations averted\n(primary model)")
+  p_b <- averted_panel(full_dfs, "National hospitalizations averted\n(100% uptake)")
+  if (is.null(p_a) || is.null(p_b)) return(invisible(NULL))
+
+  # Legend on panel A (top-right), so it sits just above the plot rather than
+  # floating in a separate row; panel B drops the duplicate.
+  p_a <- p_a + theme(legend.position = "top", legend.justification = "right")
+  p_b <- p_b + theme(legend.position = "none")
+  p <- cowplot::plot_grid(
+    p_a, p_b, ncol = 1, labels = c("A", "B"), label_fontface = "bold",
+    rel_heights = c(1.12, 1)
+  )
+
+  save_plot(p, "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake",
+            width = 7.5, height = 8)
   invisible(p)
 }
 
@@ -900,211 +617,74 @@ plot_timeseries <- function(df, metric_label, prefix, value_col, free_y = FALSE)
 }
 
 # =============================================================================
-# SUPPLEMENTARY: Regional summaries
-# =============================================================================
-
-plot_regional_choropleth <- function(outside_df, metric_label, prefix) {
-  states_sf <- get_states_sf()
-  if (is.null(states_sf)) return(invisible(NULL))
-
-  region_df <- tibble(
-    jurisdiction = unlist(config$hhs_regions),
-    hhs_region   = as.integer(rep(names(config$hhs_regions),
-                                  lengths(config$hhs_regions)))
-  )
-
-  regional_medians <- outside_df |>
-    filter(!is.na(season)) |>
-    mutate(jurisdiction = normalize_state_names(jurisdiction)) |>
-    left_join(region_df, by = "jurisdiction") |>
-    group_by(season, hhs_region) |>
-    summarise(median_outside_fraction = median(outside_fraction, na.rm = TRUE),
-              .groups = "drop")
-
-  seasons_list <- sort(unique(regional_medians$season))
-  states_regions <- states_sf |>
-    left_join(region_df, by = "jurisdiction") |>
-    filter(!is.na(hhs_region))
-
-  states_rep <- do.call(rbind, lapply(seasons_list, function(s)
-    states_regions |> mutate(season = s)))
-  states_rep <- states_rep |>
-    left_join(regional_medians, by = c("hhs_region", "season")) |>
-    sf::st_as_sf()
-
-  old_s2 <- sf::sf_use_s2(FALSE)
-  on.exit(sf::sf_use_s2(old_s2), add = TRUE)
-
-  joined <- states_rep |>
-    sf::st_make_valid() |>
-    group_by(season, hhs_region, median_outside_fraction) |>
-    summarise(.groups = "drop")
-
-  vmax <- min(max(joined$median_outside_fraction, na.rm = TRUE) * 1.1, 0.20)
-
-  p <- ggplot(joined) +
-    geom_sf(aes(fill = median_outside_fraction), color = "black", linewidth = 0.3) +
-    coord_sf(crs = "ESRI:102003", datum = NA) +
-    facet_wrap(~season) +
-    scale_fill_gradient(
-      low = "#fee5d9", high = "#a50f15",
-      limits = c(0, vmax), oob = scales::squish, na.value = "lightgray",
-      name = outside_fraction_label(metric_label, "Median"),
-      guide = guide_colorbar(
-        title.position = "top", title.hjust = 0.5,
-        barwidth = unit(12, "lines"), barheight = unit(0.6, "lines")
-      )
-    ) +
-    choropleth_theme()
-
-  states_proj <- sf::st_transform(states_sf, "ESRI:102003")
-  bbox <- sf::st_bbox(states_proj)
-  ar   <- as.numeric((bbox["xmax"] - bbox["xmin"]) / (bbox["ymax"] - bbox["ymin"]))
-  ncols <- n_distinct(joined$season)
-  save_plot(p, paste0(prefix, "fig_supp_regional_choropleth"),
-            width = 5 * ncols, height = 5 / ar + 0.8)
-}
-
-plot_regional_ridgeline <- function(outside_df, metric_label, prefix) {
-  if (!has_ridges) return(invisible(NULL))
-  library(ggridges)
-
-  region_df <- tibble(
-    jurisdiction = unlist(config$hhs_regions),
-    hhs_region   = as.integer(rep(names(config$hhs_regions),
-                                  lengths(config$hhs_regions))),
-    region_label = paste0("Region ", as.integer(
-      rep(names(config$hhs_regions), lengths(config$hhs_regions))
-    ))
-  )
-
-  df <- outside_df |>
-    filter(!is.na(season), !is.na(outside_fraction)) |>
-    mutate(jurisdiction = normalize_state_names(jurisdiction)) |>
-    left_join(region_df, by = "jurisdiction") |>
-    filter(!is.na(hhs_region)) |>
-    mutate(
-      pct          = outside_fraction * 100,
-      region_label = factor(region_label, levels = paste("Region", 10:1)),
-      season       = factor(season, levels = sort(unique(season)))
-    )
-
-  p <- ggplot(df, aes(x = pct, y = region_label, fill = season)) +
-    stat_density_ridges(alpha = 0.7, bandwidth = 1.5, quantile_lines = TRUE,
-                        quantiles = 2) +
-    scale_fill_manual(values = season_colours) +
-    facet_wrap(~season) +
-    labs(x = "Out-of-window fraction (%)", y = NULL,
-         fill = "Season",
-         title = wrap_title(paste0(prefix |> str_remove("_$"), ": regional distribution"))) +
-    scale_x_continuous(limits = c(0, NA)) +
-    theme_minimal() +
-    theme(strip.text = element_text(size = 9), axis.text = element_text(size = 8),
-          plot.title = element_text(size = 11, face = "bold", lineheight = 1.05, margin = margin(b = 8)),
-          panel.grid.minor = element_blank(), legend.position = "none")
-
-  n_seasons <- n_distinct(df$season)
-  save_plot(p, paste0(prefix, "fig_supp_regional_ridgeline"),
-            width = 4 * min(n_seasons, 3) + 1, height = 5)
-  invisible(p)
-}
-
-# =============================================================================
 # MAIN
 # =============================================================================
 
-nssp_outside  <- read_table("nssp_outside_fraction_by_state")
-nhsn_outside  <- read_table("nhsn_outside_fraction_by_state")
-nssp_extended <- read_table("nssp_extended_windows_evaluation")
-nhsn_extended <- read_table("nhsn_extended_windows_evaluation")
-nssp_regional <- read_table("nssp_regional_summary")
-nhsn_regional <- read_table("nhsn_regional_summary")
-
+nssp_outside   <- read_table("nssp_outside_fraction_by_state")
+nhsn_outside   <- read_table("nhsn_outside_fraction_by_state")
 nssp_processed <- read_processed("nssp")
 nhsn_processed <- read_processed("nhsn")
+nhsn_strata    <- maybe_table("nhsn_outside_fraction_all_strata")
+infant_stress  <- maybe_table("infant_ppx_stress_test_state_summary")
 
-nssp_boot <- maybe_table("nssp_bootstrap_ci_summary")
-nhsn_boot <- maybe_table("nhsn_bootstrap_ci_summary")
-nhsn_strata <- maybe_table("nhsn_outside_fraction_all_strata")
-nssp_infant_ppx_realistic12mo <- maybe_table("nssp_infant_ppx_realistic12mo_state_summary")
-nhsn_infant_ppx_realistic12mo <- maybe_table("nhsn_infant_ppx_realistic12mo_state_summary")
-nssp_infant_ppx_realistic8mo <- maybe_table("nssp_infant_ppx_realistic8mo_state_summary")
-nhsn_infant_ppx_realistic8mo <- maybe_table("nhsn_infant_ppx_realistic8mo_state_summary")
-infant_ppx_stress_summary <- maybe_table("infant_ppx_stress_test_window_summary")
-infant_ppx_stress_state <- maybe_table("infant_ppx_stress_test_state_summary")
-infant_hosp_averted <- maybe_table("infant_ppx_hospitalizations_averted_early_vs_baseline")
-infant_hosp_averted_late <- maybe_table("infant_ppx_hospitalizations_averted_late_vs_baseline")
-infant_hosp_averted_extended <- maybe_table("infant_ppx_hospitalizations_averted_extended_vs_baseline")
+# Start from a clean figure directory so no stale outputs remain.
+unlink(list.files(fig_dir, pattern = "\\.(png|pdf)$", full.names = TRUE))
 
-remove_stale_default_figures()
-
-# Figure 1: Choropleth grid (all seasons, both sources)
+# Figure 1: choropleth grid of out-of-window RSV fraction
 plot_choropleth_grid(nssp_outside, nhsn_outside, nssp_frac_lbl, nhsn_frac_lbl)
 
-# Figure 2: Ridgeline density plots
+# Figure 2: ridgeline densities by season and age group
 plot_ridgeline_seasons_by_agegroup(nhsn_strata, nssp_outside)
-plot_ridgeline_agegroups_by_season(nhsn_strata)
 
-# Figure 3: Infant prophylaxis model with realistic delivery priors
-plot_infant_ppx_fractional_protection(
-  nssp_infant_ppx_realistic12mo, "nssp_",
-  source_label = "NSSP",
-  figure_stub = "fig3_infant_ppx_realistic_delivery_fractional_protection",
-  title_suffix = " (realistic delivery; 12-month censor)",
-  y_max = 0.2
-)
-plot_infant_ppx_fractional_protection(
-  nhsn_infant_ppx_realistic12mo, "nhsn_",
-  source_label = "NHSN (ages 0–4)",
-  figure_stub = "fig3_infant_ppx_realistic_delivery_fractional_protection",
-  title_suffix = " (realistic delivery; 12-month censor)",
-  y_max = 0.2
-)
+# Figure 3: window advantage (Sep-Mar, Oct-Apr, year-round) over Oct-March baseline
+plot_infant_ppx_window_advantage_forest(infant_stress)
 
-# Figure 4: Infant prophylaxis model with realistic delivery priors and 8-month censor
-plot_infant_ppx_fractional_protection(
-  nssp_infant_ppx_realistic8mo, "nssp_",
-  source_label = "NSSP",
-  figure_stub = "fig4_infant_ppx_realistic_delivery_8mo_censor_fractional_protection",
-  title_suffix = " (realistic delivery; 8-month censor)",
-  y_max = 0.2
-)
-plot_infant_ppx_fractional_protection(
-  nhsn_infant_ppx_realistic8mo, "nhsn_",
-  source_label = "NHSN (ages 0–4)",
-  figure_stub = "fig4_infant_ppx_realistic_delivery_8mo_censor_fractional_protection",
-  title_suffix = " (realistic delivery; 8-month censor)",
-  y_max = 0.2
-)
-
-# Figure 5: Robustness of window gains across model assumptions
-plot_infant_ppx_stress_test(infant_ppx_stress_state)
-
-# Absolute hospitalization translation for the 100% uptake, otherwise-reference scenario
+# Figure 4: per-state distribution of hospitalizations averted, three windows, 100% uptake
 plot_infant_hospitalizations_averted(
-  infant_hosp_averted,
-  "nssp_infant_ppx_hospitalizations_averted_early_vs_baseline"
-)
-plot_infant_hospitalizations_averted(
-  infant_hosp_averted_late,
-  "nssp_infant_ppx_hospitalizations_averted_late_vs_baseline"
-)
-plot_infant_hospitalizations_averted(
-  infant_hosp_averted_extended,
-  "nssp_infant_ppx_hospitalizations_averted_extended_vs_baseline"
+  list(
+    "September-March" = maybe_table("infant_ppx_hospitalizations_averted_early_vs_baseline"),
+    "October-April"   = maybe_table("infant_ppx_hospitalizations_averted_late_vs_baseline"),
+    "Year-round"      = maybe_table("infant_ppx_hospitalizations_averted_year_round_vs_baseline")
+  ),
+  "fig4_infant_ppx_hospitalizations_averted_early_vs_baseline"
 )
 
-# Supplementary: Time series
+# Figure 5: national hospitalizations averted, three windows, primary vs 100% uptake (panels A/B)
+plot_infant_hospitalizations_averted_ab(
+  list(
+    "September-March" = maybe_table("infant_ppx_hospitalizations_averted_early_vs_baseline_primary_summary"),
+    "October-April"   = maybe_table("infant_ppx_hospitalizations_averted_late_vs_baseline_primary_summary"),
+    "Year-round"      = maybe_table("infant_ppx_hospitalizations_averted_year_round_vs_baseline_primary_summary")
+  ),
+  list(
+    "September-March" = maybe_table("infant_ppx_hospitalizations_averted_early_vs_baseline_summary"),
+    "October-April"   = maybe_table("infant_ppx_hospitalizations_averted_late_vs_baseline_summary"),
+    "Year-round"      = maybe_table("infant_ppx_hospitalizations_averted_year_round_vs_baseline_summary")
+  )
+)
+
+# Supplementary: state-level time series
 plot_timeseries(nssp_processed, nssp_ts_label, "nssp_",
                 default_or(config$primary_outcome, "rsv_pct"), free_y = FALSE)
 plot_timeseries(nhsn_processed, nhsn_ts_label, "nhsn_",
                 default_or(config$nhsn_primary_outcome, "rsv_ped_0_4"), free_y = TRUE)
 
-if (write_regional_plots) {
-  plot_regional_choropleth(nssp_outside, nssp_frac_lbl, "nssp_")
-  plot_regional_choropleth(nhsn_outside, nhsn_frac_lbl, "nhsn_")
-  plot_regional_ridgeline(nssp_outside, nssp_frac_lbl, "nssp_")
-  plot_regional_ridgeline(nhsn_outside, nhsn_frac_lbl, "nhsn_")
-}
+message("Figures saved to ", fig_dir)
 
-message("All figures saved to ", fig_dir)
+# Copy the publication figures (PNG) into results/final_figures with manuscript
+# numbering. former_plots/ and other curated files are left untouched.
+final_dir <- file.path(root, "results", "final_figures")
+dir.create(final_dir, recursive = TRUE, showWarnings = FALSE)
+final_figures <- c(
+  "fig1_choropleth_grid"                                            = "fig1_choropleth_grid",
+  "fig2_ridgeline_nssp_seasons"                                     = "fig2_ridgeline_nssp_seasons",
+  "fig3_infant_ppx_september_vs_april_advantage"                    = "fig3_infant_ppx_september_vs_april_advantage",
+  "fig4_infant_ppx_hospitalizations_averted_early_vs_baseline"      = "fig4_infant_ppx_hospitalizations_averted_early_vs_baseline",
+  "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake" = "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake"
+)
+for (src in names(final_figures)) {
+  from <- file.path(fig_dir, paste0(src, ".png"))
+  to   <- file.path(final_dir, paste0(final_figures[[src]], ".png"))
+  if (file.exists(from)) file.copy(from, to, overwrite = TRUE)
+}
+message("Publication figures copied to ", final_dir)

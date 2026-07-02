@@ -18,7 +18,7 @@ import yaml
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -375,9 +375,7 @@ def load_cached_or_fetch(
 
 def log_row_counts(df: pd.DataFrame) -> None:
     """Log summary statistics about the data."""
-    logger.info("=" * 50)
     logger.info("DATA SUMMARY")
-    logger.info("=" * 50)
 
     logger.info(f"Total rows: {len(df):,}")
     logger.info(f"Date range: {df['week_end'].min()} to {df['week_end'].max()}")
@@ -402,7 +400,6 @@ def log_row_counts(df: pd.DataFrame) -> None:
     logger.info(f"  Median: {df['rsv_pct'].median():.2f}%")
     logger.info(f"  Max: {df['rsv_pct'].max():.2f}%")
 
-    logger.info("=" * 50)
 
 
 def main():

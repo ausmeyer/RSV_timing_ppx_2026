@@ -136,7 +136,7 @@ infant_ppx_model:
     - day: 45
       efficacy: 0.807
     - day: 210
-      efficacy: 0.789
+      efficacy: 0.77
   first_outpatient_visit_days: [7, 14]
   first_outpatient_visit_probabilities: [0.5, 0.5]
   well_child_visit_days: [7, 14, 30.4375, 60.875, 121.75, 182.625]
@@ -174,7 +174,7 @@ infant_ppx_realistic_priors:
   moline_hospitalization_effectiveness_30_59_days: 0.807
   moline_hospitalization_effectiveness_60_89_days: 0.790
   moline_hospitalization_effectiveness_90_129_days: 0.564
-  moline_hospitalization_effectiveness_130_210_days: 0.789
+  moline_hospitalization_effectiveness_130_210_days: 0.77
 
 # Translation from modeled protection to expected hospitalizations averted.
 # This keeps the timing model based on state RSV curves and uses external,

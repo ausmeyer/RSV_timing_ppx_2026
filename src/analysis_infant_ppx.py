@@ -23,7 +23,7 @@ import pandas as pd
 import yaml
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
@@ -35,14 +35,22 @@ WINDOWS = {
     "baseline_oct_mar": {"start_month": 10, "start_day": 1, "end_month": 3, "end_day": 31},
     "early_sep_mar": {"start_month": 9, "start_day": 1, "end_month": 3, "end_day": 31},
     "late_oct_apr": {"start_month": 10, "start_day": 1, "end_month": 4, "end_day": 30},
-    "extended_sep_apr": {"start_month": 9, "start_day": 1, "end_month": 4, "end_day": 30},
+    # Year-round administration (dosing at any time of year). NOTE: this entry is
+    # load-bearing beyond year-round itself. Its July 1 start is the earliest window
+    # start and therefore anchors the daily birth-cohort grid for ALL windows (see
+    # `earliest_window_start` in _cohort_rows_for_group); do not remove it. The
+    # single-season protection it produces for the year_round window is replaced with
+    # the steady-state value in run_infant_ppx_analysis (see
+    # year_round_steady_state_protection), because a continuously running program must
+    # be evaluated at steady state rather than as one modeled season.
+    "year_round": {"start_month": 7, "start_day": 1, "end_month": 6, "end_day": 30},
 }
 
 WINDOW_LABELS = {
     "baseline_oct_mar": "Baseline Oct-Mar",
     "early_sep_mar": "Early Sep-Mar",
     "late_oct_apr": "Late Oct-Apr",
-    "extended_sep_apr": "Extended Sep-Apr",
+    "year_round": "Year-round",
 }
 
 PARAMETER_SOURCE_ROWS = {
@@ -137,7 +145,7 @@ GENERAL_SOURCE_ROWS = [
     (
         "seasonal_window_source",
         "CDC/ACIP recommends October-March infant RSV antibody administration in "
-        "most of the U.S.; early, late, and extended windows are policy scenario "
+        "most of the U.S.; early, late, and year-round windows are policy scenario "
         "sensitivities around that baseline."
     ),
     (
@@ -287,7 +295,7 @@ REALISTIC_PRIOR_ROWS = [
     },
     {
         "assumption": "moline_smoothed_time_since_dose_hospitalization_effectiveness",
-        "recommended_value": "0.936 at day 6; 0.807 at day 45; 0.789 at day 210",
+        "recommended_value": "0.936 at day 6; 0.807 at day 45; 0.77 at day 210",
         "units": "effectiveness",
         "use_in_model": "Smoothed efficacy-weighted sensitivity curve for the main infant-model figures.",
         "source_type": "Peer-reviewed postlicensure study",
@@ -300,15 +308,15 @@ REALISTIC_PRIOR_ROWS = [
         "url": "https://jamanetwork.com/journals/jamapediatrics/fullarticle/2843213",
         "note": (
             "Observed hospitalization VE bins were 93.6% for <30 days, 80.7% for "
-            "30-59 days, 79.0% for 60-89 days, 56.4% for 90-129 days, and 78.9% "
-            "for 130-210 days. The modeled curve smooths monotonically from the "
-            "30-59 day bin to day 210 instead of encoding the non-monotone 90-129 "
-            "dip literally."
+            "30-59 days, 79.0% for 60-89 days, 56.4% for 90-129 days, and 77% "
+            "(95% CI, 42%-92%) for 130-210 days. The modeled curve smooths "
+            "monotonically from the 30-59 day bin to day 210 instead of encoding "
+            "the non-monotone 90-129 dip literally."
         ),
     },
     {
         "assumption": "late_postdose_hospitalization_effectiveness",
-        "recommended_value": "0.789 at 130-210 days",
+        "recommended_value": "0.77 at 130-210 days",
         "units": "effectiveness",
         "use_in_model": (
             "Late post-dose anchor used as the day-210 endpoint of the smoothed "
@@ -438,12 +446,22 @@ def _build_visit_schedules(model_cfg: dict) -> list[dict]:
     if len(first_days) != len(first_probs):
         raise ValueError("first_outpatient_visit_days and probabilities must have equal length.")
 
+    other_first_day_set = {int(round(d)) for d in first_days}
     schedules = []
     for first_day, prob in zip(first_days, first_probs):
-        # A newborn assigned to a 14-day first visit should not also have a
-        # 7-day opportunity; after the first visit, routine opportunities apply.
-        days = sorted({int(round(day)) for day in well_child_days if day >= first_day})
         first_rounded = int(round(first_day))
+        # Each pathway has exactly ONE early-life first visit. A newborn
+        # assigned to the 14-day pathway should not also pick up the 7-day
+        # opportunity, and the 7-day pathway should not pick up the 14-day
+        # opportunity. After that single first visit, routine well-child
+        # opportunities apply. We therefore exclude every other configured
+        # first-visit day from the routine list for this pathway.
+        excluded_first_days = other_first_day_set - {first_rounded}
+        days = sorted({
+            int(round(day))
+            for day in well_child_days
+            if day >= first_day and int(round(day)) not in excluded_first_days
+        })
         if first_rounded not in days:
             days = sorted([first_rounded] + days)
         schedules.append({
@@ -559,7 +577,7 @@ def _efficacy_values(
             (0.0, 0.0),
             (float(protection_delay_days), 0.936),
             (45.0, 0.807),
-            (float(protection_duration_days), 0.789),
+            (float(protection_duration_days), 0.77),
         ]
 
     curve.append((0.0, 0.0))
@@ -579,6 +597,68 @@ def _efficacy_values(
         right=0.0,
     )
     return np.clip(efficacy, 0.0, 1.0)
+
+
+def year_round_steady_state_protection(model_cfg: dict) -> float:
+    """Activity-weighted protection for a year-round (any-time-of-year) birth-dose
+    program, evaluated at steady state.
+
+    A year-round policy is a continuously running program, so it must be evaluated
+    as an established (stationary) program rather than a single modeled season.
+    Under uniform daily births and a periodic annual epidemic, the population is
+    stationary: on every calendar day the same age-mix (and therefore the same
+    protected fraction) is present. The activity-weighted protected fraction then
+    reduces analytically to
+
+        uptake * mean_over_ages_0..censor( pathway-weighted efficacy since a
+        near-birth dose )
+
+    which is INDEPENDENT of the epidemic curve's timing or width. Computing
+    year-round within a single modeled season instead produces a startup artifact
+    (the window effectively opens July 1 and doses a backlog of already-born
+    infants), which spuriously favors early-onset seasons and penalizes late ones.
+    """
+    censor_days = int(round(
+        model_cfg.get("exposure_censor_age_months", 12) * 365.25 / 12
+    ))
+    eligibility_max_age_days = int(round(
+        model_cfg.get("eligibility_max_age_months", model_cfg.get("max_age_months", 8)) *
+        365.25 / 12
+    ))
+    protection_delay_days = int(round(model_cfg.get("protection_delay_days", 6)))
+    protection_duration_days = int(round(model_cfg.get("protection_duration_days", 180)))
+    uptake = float(model_cfg.get("uptake", 1.0))
+    newborn_share = float(model_cfg.get("newborn_first_week_dose_probability", 0.0))
+    newborn_dose_day = int(round(model_cfg.get("newborn_dose_day", 0)))
+
+    schedules = _build_visit_schedules(model_cfg)
+    ref = pd.Timestamp("2001-01-01")
+    dates = (ref.to_datetime64() +
+             np.arange(censor_days).astype("timedelta64[D]"))
+
+    def eff_by_age(dose_age: int) -> np.ndarray:
+        if dose_age is None or dose_age >= eligibility_max_age_days:
+            return np.zeros(censor_days, dtype=float)
+        admin = ref + pd.Timedelta(days=int(dose_age))
+        return _efficacy_values(
+            dates, admin, model_cfg, protection_delay_days, protection_duration_days
+        )
+
+    eff_age = np.zeros(censor_days, dtype=float)
+    weight = 0.0
+    if newborn_share > 0 and newborn_dose_day < eligibility_max_age_days:
+        eff_age += newborn_share * eff_by_age(newborn_dose_day)
+        weight += newborn_share
+        routine_share = 1.0 - newborn_share
+    else:
+        routine_share = 1.0
+    for schedule in schedules:
+        share = routine_share * schedule["schedule_probability"]
+        eff_age += share * eff_by_age(int(schedule["first_outpatient_visit_day"]))
+        weight += share
+    if weight > 0:
+        eff_age /= weight
+    return uptake * float(eff_age.mean())
 
 
 def _cohort_rows_for_group(
@@ -622,7 +702,15 @@ def _cohort_rows_for_group(
         for window_name in WINDOWS
     }
     earliest_window_start = min(bounds[0] for bounds in window_bounds.values())
-    birth_start = earliest_window_start - pd.Timedelta(days=eligibility_max_age_days - 1)
+    # Start the birth-cohort grid from the exposure-censor age (not the dosing
+    # eligibility age) so that the protection denominator includes every infant who
+    # can accrue at-risk RSV exposure during the season, including those born early
+    # enough to be past the dosing-eligibility age but still within the at-risk
+    # window. Using the eligibility age would omit these older-but-still-at-risk
+    # infants and slightly overstate protection in states with early-onset (summer)
+    # RSV activity. The omitted exposure is unprotected under every window, so this
+    # affects absolute protection more than the between-window contrasts.
+    birth_start = earliest_window_start - pd.Timedelta(days=exposure_censor_age_days - 1)
     birth_dates = pd.date_range(birth_start, season_end, freq="D")
     birth_weights = _birth_weights(birth_dates, model_cfg)
     birth_weight_scheme = model_cfg.get("birth_weight_scheme", "uniform")
@@ -873,10 +961,8 @@ def run_infant_ppx_analysis(
     model_cfg = config.get("infant_ppx_model", {})
     schedules = _build_visit_schedules(model_cfg)
 
-    logger.info("=" * 60)
     logger.info("INFANT PPX PROTECTION MODEL")
     logger.info(f"Datasource: {datasource} | Outcome: {value_col}")
-    logger.info("=" * 60)
 
     df_valid = df[df[value_col].notna()].copy()
     if df_valid.empty:
@@ -911,6 +997,26 @@ def run_infant_ppx_analysis(
 
     cohort_df = pd.concat(cohort_parts, ignore_index=True)
     state_summary = _summarise_state(cohort_df)
+
+    # Year-round is a continuously running (any-time-of-year) birth-dose program and
+    # must be evaluated as an established program. Replace the single-season cohort
+    # estimate for the year_round window with the steady-state value, which removes a
+    # startup artifact and is independent of the epidemic curve (see
+    # year_round_steady_state_protection). Windowed policies are genuinely
+    # single-season and are left unchanged.
+    if "year_round" in set(WINDOWS):
+        yr_ss = year_round_steady_state_protection(model_cfg)
+        yr_mask = state_summary["window_name"] == "year_round"
+        for _col in (
+            "population_activity_weighted_protection",
+            "median_person_activity_fractional_protection",
+            "mean_person_activity_fractional_protection",
+            "q25_person_activity_fractional_protection",
+            "q75_person_activity_fractional_protection",
+        ):
+            if _col in state_summary.columns:
+                state_summary.loc[yr_mask, _col] = yr_ss
+
     birth_month_summary = (
         _summarise_birth_month(cohort_df)
         if include_birth_month_summary else pd.DataFrame()

@@ -1,5 +1,5 @@
 """
-Main pipeline orchestration — 2025-26 season extension.
+Main pipeline orchestration - 2025-26 season extension.
 
 Components:
  1. Data extraction: CDC NSSP (3 seasons) and NHSN (2-3 seasons)
@@ -26,13 +26,15 @@ import numpy as np
 import pandas as pd
 import yaml
 
+# Full detail goes to pipeline.log; only warnings and errors reach the console.
+_console = logging.StreamHandler(sys.stdout)
+_console.setLevel(logging.WARNING)
+_logfile = logging.FileHandler("pipeline.log")
+_logfile.setLevel(logging.INFO)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler("pipeline.log")
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[_console, _logfile],
 )
 logger = logging.getLogger(__name__)
 
@@ -246,16 +248,29 @@ def create_infant_stress_window_summary(
     ]
     for keys, group in state_summary.groupby(group_cols, dropna=False):
         row = dict(zip(group_cols, keys))
-        values = group["median_person_activity_fractional_protection"].dropna()
-        population_values = group["population_activity_weighted_protection"].dropna()
+        person_values = group["median_person_activity_fractional_protection"].dropna()
+        activity_values = group["population_activity_weighted_protection"].dropna()
         dose_values = group["share_receiving_ppx"].dropna()
         row.update({
             "n_state_seasons": len(group),
-            "median_person_activity_fractional_protection": values.median() if len(values) else None,
-            "q25_person_activity_fractional_protection": values.quantile(0.25) if len(values) else None,
-            "q75_person_activity_fractional_protection": values.quantile(0.75) if len(values) else None,
-            "population_activity_weighted_protection": (
-                population_values.median() if len(population_values) else None
+            "metric_used": "population_activity_weighted_protection",
+            "median_population_activity_weighted_protection": (
+                activity_values.median() if len(activity_values) else None
+            ),
+            "q25_population_activity_weighted_protection": (
+                activity_values.quantile(0.25) if len(activity_values) else None
+            ),
+            "q75_population_activity_weighted_protection": (
+                activity_values.quantile(0.75) if len(activity_values) else None
+            ),
+            "median_person_activity_fractional_protection": (
+                person_values.median() if len(person_values) else None
+            ),
+            "q25_person_activity_fractional_protection": (
+                person_values.quantile(0.25) if len(person_values) else None
+            ),
+            "q75_person_activity_fractional_protection": (
+                person_values.quantile(0.75) if len(person_values) else None
             ),
             "median_share_receiving_ppx": dose_values.median() if len(dose_values) else None,
             "uptake": group["uptake"].iloc[0] if "uptake" in group else None,
@@ -278,17 +293,14 @@ def create_infant_stress_window_summary(
     summary = pd.DataFrame(rows)
     baseline = (
         summary[summary["window_name"] == "baseline_oct_mar"]
-        [["datasource", "scenario_id", "median_person_activity_fractional_protection"]]
+        [["datasource", "scenario_id", "median_population_activity_weighted_protection"]]
         .rename(columns={
-            "median_person_activity_fractional_protection": "baseline_oct_mar_protection"
+            "median_population_activity_weighted_protection": "baseline_oct_mar_protection"
         })
     )
     summary = summary.merge(baseline, on=["datasource", "scenario_id"], how="left")
-    summary["delta_vs_baseline_oct_mar"] = (
-        summary["median_person_activity_fractional_protection"]
-        - summary["baseline_oct_mar_protection"]
-    )
-    ci_rows = []
+
+    delta_rows = []
     rng = np.random.default_rng(bootstrap_seed)
     for (datasource, scenario_id), group in state_summary.groupby(["datasource", "scenario_id"]):
         unit_cols = ["season", "jurisdiction"]
@@ -296,20 +308,22 @@ def create_infant_stress_window_summary(
             group.pivot_table(
                 index=unit_cols,
                 columns="window_name",
-                values="median_person_activity_fractional_protection",
+                values="population_activity_weighted_protection",
                 aggfunc="first",
             )
             .dropna(subset=["baseline_oct_mar"])
         )
         if pivot.empty:
             continue
-        n_units = len(pivot)
         for window_name in pivot.columns:
             if window_name == "baseline_oct_mar":
-                ci_rows.append({
+                delta_rows.append({
                     "datasource": datasource,
                     "scenario_id": scenario_id,
                     "window_name": window_name,
+                    "delta_vs_baseline_oct_mar": 0.0,
+                    "q25_delta_vs_baseline_oct_mar": 0.0,
+                    "q75_delta_vs_baseline_oct_mar": 0.0,
                     "delta_ci_lower": 0.0,
                     "delta_ci_upper": 0.0,
                     "bootstrap_pr_delta_gt_zero": None,
@@ -319,24 +333,31 @@ def create_infant_stress_window_summary(
             if valid.empty:
                 continue
             sample_n = len(valid)
-            deltas = np.empty(bootstrap_replicates, dtype=float)
+            observed_delta = (
+                valid[window_name].to_numpy(dtype=float)
+                - valid["baseline_oct_mar"].to_numpy(dtype=float)
+            )
+            bootstrap_deltas = np.empty(bootstrap_replicates, dtype=float)
             values = valid.to_numpy(dtype=float)
             for i in range(bootstrap_replicates):
                 idx = rng.integers(0, sample_n, sample_n)
                 sample = values[idx, :]
-                deltas[i] = np.median(sample[:, 1]) - np.median(sample[:, 0])
-            ci_rows.append({
+                bootstrap_deltas[i] = np.median(sample[:, 1] - sample[:, 0])
+            delta_rows.append({
                 "datasource": datasource,
                 "scenario_id": scenario_id,
                 "window_name": window_name,
-                "delta_ci_lower": float(np.quantile(deltas, 0.025)),
-                "delta_ci_upper": float(np.quantile(deltas, 0.975)),
-                "bootstrap_pr_delta_gt_zero": float(np.mean(deltas > 0)),
+                "delta_vs_baseline_oct_mar": float(np.median(observed_delta)),
+                "q25_delta_vs_baseline_oct_mar": float(np.quantile(observed_delta, 0.25)),
+                "q75_delta_vs_baseline_oct_mar": float(np.quantile(observed_delta, 0.75)),
+                "delta_ci_lower": float(np.quantile(bootstrap_deltas, 0.025)),
+                "delta_ci_upper": float(np.quantile(bootstrap_deltas, 0.975)),
+                "bootstrap_pr_delta_gt_zero": float(np.mean(bootstrap_deltas > 0)),
             })
 
-    if ci_rows:
+    if delta_rows:
         summary = summary.merge(
-            pd.DataFrame(ci_rows),
+            pd.DataFrame(delta_rows),
             on=["datasource", "scenario_id", "window_name"],
             how="left",
         )
@@ -356,23 +377,27 @@ def create_infant_stress_ranking(window_summary: pd.DataFrame) -> pd.DataFrame:
             ["datasource", "metric_label", "scenario_id", "scenario_family", "scenario_label", "scenario_order"],
             keys,
         ))
-        values = group.set_index("window_name")["median_person_activity_fractional_protection"]
-        best_window = values.idxmax() if len(values.dropna()) else None
+        indexed = group.set_index("window_name")
+        protection = indexed["median_population_activity_weighted_protection"]
+        deltas = indexed["delta_vs_baseline_oct_mar"]
+        best_window = deltas.idxmax() if len(deltas.dropna()) else None
         row.update({
+            "metric_used": "population_activity_weighted_protection",
             "best_window_name": best_window,
             "best_window_label": (
                 group.loc[group["window_name"] == best_window, "window_label"].iloc[0]
                 if best_window is not None and (group["window_name"] == best_window).any()
                 else None
             ),
-            "baseline_oct_mar": values.get("baseline_oct_mar"),
-            "early_sep_mar": values.get("early_sep_mar"),
-            "late_oct_apr": values.get("late_oct_apr"),
-            "extended_sep_apr": values.get("extended_sep_apr"),
-            "early_minus_baseline": values.get("early_sep_mar") - values.get("baseline_oct_mar"),
-            "late_minus_baseline": values.get("late_oct_apr") - values.get("baseline_oct_mar"),
-            "extended_minus_baseline": values.get("extended_sep_apr") - values.get("baseline_oct_mar"),
-            "early_minus_late": values.get("early_sep_mar") - values.get("late_oct_apr"),
+            "baseline_oct_mar": protection.get("baseline_oct_mar"),
+            "early_sep_mar": protection.get("early_sep_mar"),
+            "late_oct_apr": protection.get("late_oct_apr"),
+            "year_round": protection.get("year_round"),
+            "early_minus_baseline": deltas.get("early_sep_mar"),
+            "late_minus_baseline": deltas.get("late_oct_apr"),
+            "year_round_minus_baseline": deltas.get("year_round"),
+            "early_minus_late": deltas.get("early_sep_mar") - deltas.get("late_oct_apr"),
+            "early_minus_year_round": deltas.get("early_sep_mar") - deltas.get("year_round"),
         })
         rows.append(row)
     return pd.DataFrame(rows).sort_values(["scenario_order", "datasource"])
@@ -413,7 +438,7 @@ def create_infant_hospitalizations_averted(
     comparison_window_label = {
         "early_sep_mar": "Early Sep-Mar",
         "late_oct_apr": "Late Oct-Apr",
-        "extended_sep_apr": "Extended Sep-Apr",
+        "year_round": "Year-round",
     }.get(comparison_window, comparison_window)
     risk = float(translation_cfg["baseline_hospitalization_risk_per_infant_season"])
 
@@ -545,16 +570,13 @@ def create_infant_hospitalizations_averted(
 
 
 def log_summary_stats(df_outside, label):
-    logger.info("\n" + "=" * 70)
     logger.info(f"{label} SUMMARY")
-    logger.info("=" * 70)
     for season in sorted(df_outside["season"].unique()):
         data = df_outside[df_outside["season"] == season]
         median = data["outside_fraction"].median()
         q25 = data["outside_fraction"].quantile(0.25)
         q75 = data["outside_fraction"].quantile(0.75)
-        logger.info(f"  {season}: median={median:.1%} (IQR: {q25:.1%}–{q75:.1%})")
-    logger.info("=" * 70)
+        logger.info(f"  {season}: median={median:.1%} (IQR: {q25:.1%}-{q75:.1%})")
 
 
 # ---------------------------------------------------------------------------
@@ -587,12 +609,12 @@ def filter_nhsn_by_completeness(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         if n_reporting >= min_states:
             kept_seasons.append(season_name)
             logger.info(
-                f"NHSN {season_name}: {n_reporting} reporting states — INCLUDED"
+                f"NHSN {season_name}: {n_reporting} reporting states - INCLUDED"
             )
         else:
             logger.warning(
                 f"NHSN {season_name}: only {n_reporting} reporting states "
-                f"(minimum {min_states}) — EXCLUDED for completeness"
+                f"(minimum {min_states}) - EXCLUDED for completeness"
             )
 
     return df[df["season"].isin(kept_seasons)].copy()
@@ -614,15 +636,13 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
     Returns:
         Dictionary with all results
     """
-    logger.info("=" * 70)
     logger.info("RSV TIMING 2025-26 EXTENSION PIPELINE")
     logger.info(f"Started at: {datetime.now().isoformat()}")
-    logger.info("=" * 70 + "\n")
 
     from src.pull_nssp import load_cached_or_fetch as load_nssp, log_row_counts as log_nssp_rows
     from src.pull_nhsn import load_cached_or_fetch as load_nhsn, log_row_counts as log_nhsn_rows
     from src.build_seasons import build_seasons, save_processed
-    from src.analysis_burden import run_burden_analysis, compute_bootstrap_ci
+    from src.analysis_burden import run_burden_analysis
     from src.analysis_infant_ppx import realistic_prior_table, run_infant_ppx_analysis
     config = load_config()
     remove_stale_data_driven_outputs()
@@ -690,7 +710,7 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
     log_summary_stats(nssp_burden["outside_fraction"], "NSSP")
 
     # ------------------------------------------------------------------
-    # NHSN — primary age stratum (rsv_ped_0_4)
+    # NHSN - primary age stratum (rsv_ped_0_4)
     # ------------------------------------------------------------------
     logger.info("\nStep 5: Extracting NHSN data...")
     df_nhsn_raw = load_nhsn(max_age_days=max_cache_age_days, force_refresh=force_refresh)
@@ -739,7 +759,7 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
     log_summary_stats(nhsn_burden["outside_fraction"], "NHSN (ages 0-4)")
 
     # ------------------------------------------------------------------
-    # NHSN — additional age strata
+    # NHSN - additional age strata
     # ------------------------------------------------------------------
     logger.info("\nStep 9: NHSN burden analysis by age stratum...")
 
@@ -935,6 +955,18 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
             ),
             ("visit_delay_0", "Visit delay", "No routine-visit delay; otherwise reference", 30, {"routine_visit_delay_days": 0}),
             ("visit_delay_30", "Visit delay", "30-day routine-visit delay; otherwise reference", 31, {"routine_visit_delay_days": 30}),
+            (
+                "waning_rapid",
+                "Waning",
+                "Rapid waning: 130-210 day effectiveness at the lower 95% CI (42%); otherwise reference",
+                40,
+                {"efficacy_curve_points": [
+                    {"day": 0.0, "efficacy": 0.0},
+                    {"day": 6.0, "efficacy": 0.936},
+                    {"day": 45.0, "efficacy": 0.807},
+                    {"day": 210.0, "efficacy": 0.42},
+                ]},
+            ),
         ]
         for scenario_id, family, label, order, edits in stress_specs:
             run_stress_scenario(scenario_id, family, label, order, edits)
@@ -948,7 +980,7 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
             comparison_outputs = {
                 "early_sep_mar": "early",
                 "late_oct_apr": "late",
-                "extended_sep_apr": "extended",
+                "year_round": "year_round",
             }
             for comparison_window, slug in comparison_outputs.items():
                 comparison_config = deepcopy(config)
@@ -972,6 +1004,38 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
                         f"infant_ppx_hospitalizations_averted_{slug}_vs_baseline_summary",
                     )
                     hosp_summary_parts.append(hosp_averted_summary)
+
+            # Primary-model (reference scenario, realistic uptake) averted for the
+            # A/B hospitalizations-averted figure. Mirrors the 100% uptake outputs
+            # above but uses scenario_id=reference_12mo so the figure can contrast
+            # realistic-uptake impact (panel A) with the 100% uptake idealization
+            # (panel B).
+            for primary_window, primary_slug in {
+                "early_sep_mar": "early",
+                "late_oct_apr": "late",
+                "year_round": "year_round",
+            }.items():
+                primary_config = deepcopy(config)
+                primary_tcfg = primary_config.setdefault(
+                    "infant_hospitalization_translation", {}
+                )
+                primary_tcfg["comparison_window"] = primary_window
+                primary_tcfg["scenario_id"] = "reference_12mo"
+                primary_averted, primary_averted_summary = create_infant_hospitalizations_averted(
+                    stress_state,
+                    primary_config,
+                )
+                if not primary_averted.empty:
+                    save_table(
+                        primary_averted,
+                        f"infant_ppx_hospitalizations_averted_{primary_slug}_vs_baseline_primary",
+                    )
+                if not primary_averted_summary.empty:
+                    save_table(
+                        primary_averted_summary,
+                        f"infant_ppx_hospitalizations_averted_{primary_slug}_vs_baseline_primary_summary",
+                    )
+
             save_table(stress_state, "infant_ppx_stress_test_state_summary")
             save_table(stress_window_summary, "infant_ppx_stress_test_window_summary")
             save_table(stress_ranking, "infant_ppx_stress_test_ranking")
@@ -1048,7 +1112,6 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
     run_r_figures()
 
     logger.info(f"\nPipeline completed at: {datetime.now().isoformat()}")
-    logger.info("=" * 70)
 
     return {
         "nssp": {

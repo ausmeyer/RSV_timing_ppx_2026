@@ -53,7 +53,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         return values.iloc[0] if len(values) else np.nan
 
     add("=" * 80)
-    add("    MANUSCRIPT DATA SUMMARY: RSV Activity Outside October–March Window")
+    add("    MANUSCRIPT DATA SUMMARY: RSV Activity Outside October-March Window")
     add("    2025-26 Season Extension (3 NSSP Seasons, Up to 3 NHSN Seasons)")
     add("=" * 80)
     add()
@@ -79,17 +79,17 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         n      = len(data)
 
         add(f"\n  {label}:")
-        add(f"    • Median: {median:.1f}%")
-        add(f"    • IQR: {q25:.1f}% – {q75:.1f}%")
-        add(f"    • Range: {mn:.1f}% – {mx:.1f}%")
-        add(f"    • N = {n} jurisdictions")
+        add(f"    - Median: {median:.1f}%")
+        add(f"    - IQR: {q25:.1f}% - {q75:.1f}%")
+        add(f"    - Range: {mn:.1f}% - {mx:.1f}%")
+        add(f"    - N = {n} jurisdictions")
 
         top5 = data.nlargest(5, "outside_fraction")[["jurisdiction", "outside_fraction"]]
-        add("    • Top 5: " + ", ".join(
+        add("    - Top 5: " + ", ".join(
             f"{r.jurisdiction} ({r.outside_fraction*100:.1f}%)" for _, r in top5.iterrows()
         ))
 
-        # Bootstrap CI if available — filter by datasource to avoid cross-source lookup
+        # Bootstrap CI if available - filter by datasource to avoid cross-source lookup
         if not bootstrap_ci.empty:
             ci_mask = (
                 (bootstrap_ci.get("season", pd.Series(dtype=str)) == season) &
@@ -101,14 +101,14 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             if len(ci_row) > 0:
                 lo = ci_row["ci_lower"].iloc[0] * 100
                 hi = ci_row["ci_upper"].iloc[0] * 100
-                add(f"    • Bootstrap 95% CI for median: [{lo:.1f}%, {hi:.1f}%]")
+                add(f"    - Bootstrap 95% CI for median: [{lo:.1f}%, {hi:.1f}%]")
 
         return median, q25, q75, mn, mx
 
     # -----------------------------------------------------------------------
     # SECTION 1: Out-of-window fractions
     # -----------------------------------------------------------------------
-    add("PARAGRAPH 1 — National and State-Level Findings (Figure 1: Choropleths)")
+    add("PARAGRAPH 1 - National and State-Level Findings")
     add("-" * 80)
     add()
     add("Out-of-Window Fractions:")
@@ -127,7 +127,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     # -----------------------------------------------------------------------
     # SECTION 2: Window coverage comparison
     # -----------------------------------------------------------------------
-    add("PARAGRAPH 2 — Alternative Window Scenarios (Figure 3: Coverage Comparison)")
+    add("PARAGRAPH 2 - Alternative Window Scenarios")
     add("-" * 80)
     add()
 
@@ -156,7 +156,6 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         ("baseline_oct_mar", "Baseline (Oct-Mar)"),
         ("early_sep_mar",    "Early (Sep-Mar)"),
         ("late_oct_apr",     "Late (Oct-Apr)"),
-        ("extended_sep_apr", "Extended (Sep-Apr)")
     ]
 
     # Build header row
@@ -185,30 +184,26 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         baseline = get_coverage(nssp_extended, s, "baseline_oct_mar")
         early    = get_coverage(nssp_extended, s, "early_sep_mar")
         late     = get_coverage(nssp_extended, s, "late_oct_apr")
-        ext      = get_coverage(nssp_extended, s, "extended_sep_apr")
         add(f"\n  NSSP {s}:")
         if not np.isnan(baseline):
-            add(f"    • Early:    +{early - baseline:.1f} pp")
-            add(f"    • Late:     +{late  - baseline:.1f} pp")
-            add(f"    • Extended: +{ext   - baseline:.1f} pp")
+            add(f"    - Early:    +{early - baseline:.1f} pp")
+            add(f"    - Late:     +{late  - baseline:.1f} pp")
 
     for s in nhsn_seasons_avail:
         baseline = get_coverage(nhsn_extended, s, "baseline_oct_mar")
         early    = get_coverage(nhsn_extended, s, "early_sep_mar")
         late     = get_coverage(nhsn_extended, s, "late_oct_apr")
-        ext      = get_coverage(nhsn_extended, s, "extended_sep_apr")
         add(f"\n  NHSN {s}:")
         if not np.isnan(baseline):
-            add(f"    • Early:    +{early - baseline:.1f} pp")
-            add(f"    • Late:     +{late  - baseline:.1f} pp")
-            add(f"    • Extended: +{ext   - baseline:.1f} pp")
+            add(f"    - Early:    +{early - baseline:.1f} pp")
+            add(f"    - Late:     +{late  - baseline:.1f} pp")
 
     add()
 
     # -----------------------------------------------------------------------
     # SECTION 3: Age-stratified NHSN analysis
     # -----------------------------------------------------------------------
-    add("PARAGRAPH 3 — NHSN Age-Stratified Analysis (Figure 2: Ridgeline Plots)")
+    add("PARAGRAPH 3 - NHSN Age-Stratified Analysis")
     add("-" * 80)
     add()
 
@@ -223,16 +218,16 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
                 median = sdata["outside_fraction"].median() * 100
                 q25    = sdata["outside_fraction"].quantile(0.25) * 100
                 q75    = sdata["outside_fraction"].quantile(0.75) * 100
-                add(f"    {s}: median={median:.1f}% (IQR {q25:.1f}–{q75:.1f}%)")
+                add(f"    {s}: median={median:.1f}% (IQR {q25:.1f}-{q75:.1f}%)")
             add()
     else:
-        add("  [Age-strata table not yet available — run pipeline first]")
+        add("  [Age-strata table not yet available - run pipeline first]")
         add()
 
     # -----------------------------------------------------------------------
     # SECTION 4: Longitudinal consistency
     # -----------------------------------------------------------------------
-    add("PARAGRAPH 4 — Longitudinal Consistency Across Seasons")
+    add("PARAGRAPH 4 - Longitudinal Consistency Across Seasons")
     add("-" * 80)
     add()
 
@@ -245,27 +240,27 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
 
             add(f"  {ds.upper()}:")
             cv_median = sub["cv_outside_fraction"].median()
-            add(f"    • Median state-level CV: {cv_median:.3f}")
+            add(f"    - Median state-level CV: {cv_median:.3f}")
 
             if "rank_corr_2324_vs_2425" in sub.columns:
                 rho = first_nonmissing(sub["rank_corr_2324_vs_2425"])
                 rho_label = "not available" if np.isnan(rho) else f"{rho:.3f}"
-                add(f"    • Spearman ρ (2023-24 vs 2024-25): {rho_label}")
+                add(f"    - Spearman rho (2023-24 vs 2024-25): {rho_label}")
 
             if "rank_corr_2425_vs_2526" in sub.columns:
                 rho = first_nonmissing(sub["rank_corr_2425_vs_2526"])
                 rho_label = "not available" if np.isnan(rho) else f"{rho:.3f}"
-                add(f"    • Spearman ρ (2024-25 vs 2025-26): {rho_label}")
+                add(f"    - Spearman rho (2024-25 vs 2025-26): {rho_label}")
 
             add()
     else:
-        add("  [Longitudinal consistency table not yet available — run pipeline first]")
+        add("  [Longitudinal consistency table not yet available - run pipeline first]")
         add()
 
     # -----------------------------------------------------------------------
     # SECTION 5: Infant prophylaxis protection model
     # -----------------------------------------------------------------------
-    add("PARAGRAPH 5 — Infant Prophylaxis Protection Model, Realistic Delivery Priors (Figure 3)")
+    add("PARAGRAPH 5 - Infant Prophylaxis Protection Model, Realistic Delivery Priors")
     add("-" * 80)
     add()
 
@@ -279,15 +274,23 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             data = df[df["window_name"] == wk]
             if len(data) == 0:
                 continue
-            median_person = data["median_person_activity_fractional_protection"].median() * 100
-            q25 = data["median_person_activity_fractional_protection"].quantile(0.25) * 100
-            q75 = data["median_person_activity_fractional_protection"].quantile(0.75) * 100
-            pop_weighted = data["population_activity_weighted_protection"].median() * 100
+            metric_col = (
+                "population_activity_weighted_protection"
+                if "population_activity_weighted_protection" in data.columns
+                else "median_person_activity_fractional_protection"
+            )
+            metric_label = (
+                "activity-weighted protection"
+                if metric_col == "population_activity_weighted_protection"
+                else "person-level protection"
+            )
+            median_protection = data[metric_col].median() * 100
+            q25 = data[metric_col].quantile(0.25) * 100
+            q75 = data[metric_col].quantile(0.75) * 100
             dose_opp = data["share_receiving_ppx"].median() * 100
             add(
-                f"    • {wlabel}: median person-level protection={median_person:.1f}% "
-                f"(state IQR {q25:.1f}–{q75:.1f}%); "
-                f"population activity-weighted protection={pop_weighted:.1f}%; "
+                f"    - {wlabel}: median {metric_label}={median_protection:.1f}% "
+                f"(state IQR {q25:.1f}-{q75:.1f}%); "
                 f"dose opportunity={dose_opp:.1f}%"
             )
         add()
@@ -301,7 +304,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         "NHSN ages 0-4 curve-weighted model, realistic delivery priors, 12-month censor",
     )
 
-    add("PARAGRAPH 6 — Infant Prophylaxis Protection Model, 8-Month Exposure Censor (Figure 4)")
+    add("PARAGRAPH 6 - Infant Prophylaxis Protection Model, 8-Month Exposure Censor")
     add("-" * 80)
     add()
     summarize_infant_ppx(
@@ -313,7 +316,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         "NHSN ages 0-4 curve-weighted model, realistic delivery priors, 8-month censor",
     )
 
-    add("PARAGRAPH 7 — Infant Prophylaxis Protection Model Robustness (Figure 5)")
+    add("PARAGRAPH 7 - Infant Prophylaxis Protection Model Robustness")
     add("-" * 80)
     add()
     if infant_stress_ranking.empty:
@@ -328,18 +331,23 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             n = len(sub)
             early_gt_late = (sub["early_minus_late"] > 0).sum()
             early_gt_baseline = (sub["early_minus_baseline"] > 0).sum()
-            extended_gt_baseline = (sub["extended_minus_baseline"] > 0).sum()
+            year_round_gt_baseline = (sub["year_round_minus_baseline"] > 0).sum()
             add(f"  {label}:")
-            add(f"    • Early Sep-Mar exceeded late Oct-Apr in {early_gt_late}/{n} stress scenarios.")
-            add(f"    • Early Sep-Mar exceeded Oct-Mar baseline in {early_gt_baseline}/{n} stress scenarios.")
-            add(f"    • Extended Sep-Apr exceeded Oct-Mar baseline in {extended_gt_baseline}/{n} stress scenarios.")
+            add("    - Metric: population activity-weighted protection.")
+            add(f"    - Early Sep-Mar exceeded late Oct-Apr in {early_gt_late}/{n} stress scenarios.")
+            add(f"    - Early Sep-Mar exceeded Oct-Mar baseline in {early_gt_baseline}/{n} stress scenarios.")
+            add(f"    - Year-round exceeded Oct-Mar baseline in {year_round_gt_baseline}/{n} stress scenarios.")
             add(
-                "    • Median early-minus-baseline change across scenarios: "
+                "    - Median early-minus-baseline change across scenarios: "
                 f"{sub['early_minus_baseline'].median() * 100:.2f} percentage points."
+            )
+            add(
+                "    - Median early-minus-late change across scenarios: "
+                f"{sub['early_minus_late'].median() * 100:.2f} percentage points."
             )
             add()
 
-    add("PARAGRAPH 8 — Hospitalization Translation (100% uptake scenario)")
+    add("PARAGRAPH 8 - Hospitalization Translation (100% uptake scenario)")
     add("-" * 80)
     add()
     hosp_summary = (
@@ -359,7 +367,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         comparison_order = {
             "early_sep_mar": 1,
             "late_oct_apr": 2,
-            "extended_sep_apr": 3,
+            "year_round": 3,
         }
         hosp_summary = hosp_summary.copy()
         hosp_summary["_comparison_order"] = (
@@ -420,11 +428,11 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         m, q25, q75 = d.get("median", np.nan), d.get("q25", np.nan), d.get("q75", np.nan)
         if not np.isnan(m):
             nssp_texts.append(
-                f"{m:.1f}% (IQR: {q25:.1f}–{q75:.1f}%) in {s}"
+                f"{m:.1f}% (IQR: {q25:.1f}-{q75:.1f}%) in {s}"
             )
     if nssp_texts:
         add("Across states, the median fraction of RSV-associated ED visits (NSSP) occurring "
-            "outside the October–March window was " + "; and ".join(nssp_texts) + ".")
+            "outside the October-March window was " + "; and ".join(nssp_texts) + ".")
     add()
 
     add("RESULTS PARAGRAPH 2 (NHSN):")
@@ -435,10 +443,10 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         m, q25, q75 = d.get("median", np.nan), d.get("q25", np.nan), d.get("q75", np.nan)
         if not np.isnan(m):
             nhsn_texts.append(
-                f"{m:.1f}% (IQR: {q25:.1f}–{q75:.1f}%) in {s}"
+                f"{m:.1f}% (IQR: {q25:.1f}-{q75:.1f}%) in {s}"
             )
     if nhsn_texts:
-        add("For laboratory-confirmed RSV-associated pediatric hospitalizations (NHSN, ages 0–4), "
+        add("For laboratory-confirmed RSV-associated pediatric hospitalizations (NHSN, ages 0-4), "
             "the median out-of-window fraction was " + "; and ".join(nhsn_texts) + ".")
     add()
 
@@ -455,9 +463,9 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
         overall_median = np.median(all_medians)
         max_outside    = max(all_maxes)
         add(f"Across {len(nssp_seasons)} NSSP seasons and {len(nhsn_seasons_avail)} NHSN season(s), "
-            f"approximately {overall_median:.0f}% of RSV activity nationally — "
-            f"and up to {max_outside:.0f}% in some states — "
-            f"occurred outside the current recommended October–March nirsevimab administration window. "
+            f"approximately {overall_median:.0f}% of RSV activity nationally - "
+            f"and up to {max_outside:.0f}% in some states - "
+            f"occurred outside the current recommended October-March nirsevimab administration window. "
             f"This pattern was consistent across seasons, suggesting that year-over-year variability "
             f"does not eliminate out-of-window burden.")
     add()
@@ -471,42 +479,43 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     add("-" * 80)
     add()
     add("NSSP:")
-    add("  • Dataset: CDC NSSP Emergency Department Visit Trajectories")
-    add("  • Socrata API dataset ID: rdmq-nq56")
-    add("  • Field: percent_visits_rsv (% of ED visits with RSV-related code, all ages)")
-    add(f"  • Seasons: {', '.join(nssp_seasons) if nssp_seasons else 'N/A'}")
-    add("  • Geographic scope: all available states plus District of Columbia; aggregate rows and territories excluded")
+    add("  - Dataset: CDC NSSP Emergency Department Visit Trajectories")
+    add("  - Socrata API dataset ID: rdmq-nq56")
+    add("  - Field: percent_visits_rsv (% of ED visits with RSV-related code, all ages)")
+    add(f"  - Seasons: {', '.join(nssp_seasons) if nssp_seasons else 'N/A'}")
+    add("  - Geographic scope: all available states plus District of Columbia; aggregate rows and territories excluded")
     add()
     add("NHSN:")
-    add("  • Dataset: CDC NHSN Weekly Hospital Respiratory Data (HRD)")
-    add("  • Socrata API dataset ID: ua7e-t2fy")
-    add("  • Primary field: numconfrsvnewadmped0to4 (lab-confirmed RSV admissions, ages 0-4)")
-    add("  • Additional strata: totalconfrsvnewadmped (all pediatric), totalconfrsvnewadm (all ages)")
-    add(f"  • Seasons included: {', '.join(nhsn_seasons_avail) if nhsn_seasons_avail else 'determined at runtime'}")
-    add("  • Completeness criterion: ≥45 states reporting for 2023-24, ≥40 for later seasons")
+    add("  - Dataset: CDC NHSN Weekly Hospital Respiratory Data (HRD)")
+    add("  - Socrata API dataset ID: ua7e-t2fy")
+    add("  - Primary field: numconfrsvnewadmped0to4 (lab-confirmed RSV admissions, ages 0-4)")
+    add("  - Additional strata: totalconfrsvnewadmped (all pediatric), totalconfrsvnewadm (all ages)")
+    add(f"  - Seasons included: {', '.join(nhsn_seasons_avail) if nhsn_seasons_avail else 'determined at runtime'}")
+    add("  - Completeness criterion: >=45 states reporting for 2023-24, >=40 for later seasons")
     add()
     add("BOOTSTRAP CONFIDENCE INTERVALS")
     add("-" * 80)
-    add("  • Nonparametric bootstrap, 10,000 replicates")
-    add("  • Resample states with replacement (n = number of states per season)")
-    add("  • Point estimate: median outside fraction")
-    add("  • 95% CI: 2.5th and 97.5th percentiles of bootstrap distribution")
+    add("  - Nonparametric bootstrap, 10,000 replicates")
+    add("  - Resample states with replacement (n = number of states per season)")
+    add("  - Point estimate: median outside fraction")
+    add("  - 95% CI: 2.5th and 97.5th percentiles of bootstrap distribution")
     add()
     add("LONGITUDINAL CONSISTENCY")
     add("-" * 80)
-    add("  • State-level coefficient of variation (CV) = SD / mean across seasons")
-    add("  • Spearman rank correlation of state outside-fractions between season pairs")
-    add("  • Assesses whether states that are high in one season remain high in the next")
+    add("  - State-level coefficient of variation (CV) = SD / mean across seasons")
+    add("  - Spearman rank correlation of state outside-fractions between season pairs")
+    add("  - Assesses whether states that are high in one season remain high in the next")
     add()
     add("INFANT PROPHYLAXIS PROTECTION MODEL")
     add("-" * 80)
-    add("  • Daily birth cohorts with births uniformly distributed across calendar days")
-    add("  • Cohorts begin with infants who could be eligible at the earliest scenario window")
-    add("  • Eligible infants receive prophylaxis at the first routine well-child visit inside each scenario window")
-    add("  • Base assumptions: 100% uptake at eligible visits, eligibility for receipt before age 8 months, follow-up censored at age 12 months")
-    add("  • Protection assumptions: 6-day delay to protection and 180-day protection duration")
-    add("  • Primary metric: median person-level fraction of observed infant RSV exposure occurring while protected")
-    add("  • State-season RSV exposure weights come from the observed NSSP or NHSN epidemic curve")
+    add("  - Daily birth cohorts with births uniformly distributed across calendar days")
+    add("  - Cohorts begin with infants who could be eligible at the earliest scenario window")
+    add("  - Eligible infants receive prophylaxis through newborn/first-week or routine-care opportunities inside each scenario window")
+    add("  - Reference assumptions: 18.5% uptake, 38.1% newborn/first-week dosing among recipients, eligibility for receipt before age 8 months, and follow-up censored at age 12 months")
+    add("  - Protection assumptions: 6-day rise to peak concentration and smoothed time-varying effectiveness through day 210")
+    add("  - Primary metrics: cohort-weighted median population-level fractional protection and population activity-weighted protection")
+    add("  - Hospitalization translation uses the 100% uptake scenario to isolate timing effects")
+    add("  - State-season RSV exposure weights come from the observed NSSP or NHSN epidemic curve")
     add()
     add("=" * 80)
 
@@ -516,8 +525,6 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     output_file = root / output_path
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text("\n".join(lines))
-
-    print(f"Manuscript statistics saved to {output_path}")
     return output_file
 
 
