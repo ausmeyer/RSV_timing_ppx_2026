@@ -125,6 +125,64 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     add()
 
     # -----------------------------------------------------------------------
+    # SECTION 1b: Out-of-window early vs late split (Figure 1 legend)
+    # Mean per-state share of total seasonal NSSP RSV activity falling in the
+    # early out-of-window period (Jul-Sep, before the October window start) and
+    # the late out-of-window period (Apr-Jun, after the March window end).
+    # Written both to the stats text and to a durable results table so the
+    # Figure 1 legend percentages are reproducible from the pipeline.
+    # -----------------------------------------------------------------------
+    add("PARAGRAPH 1b - Out-of-Window Early vs Late Split, NSSP (Figure 1 legend)")
+    add("-" * 80)
+    add()
+    processed_nssp = root / "data" / "processed" / "nssp_processed.csv"
+    exclude_juris = (
+        {"USA", "National"}
+        | {f"Region {i}" for i in range(1, 11)}
+        | {"AS", "GU", "MP", "PR", "VI", "Guam", "Puerto Rico", "Virgin Islands"}
+    )
+    if processed_nssp.exists():
+        nssp_wk = pd.read_csv(processed_nssp, parse_dates=["week_end"])
+        nssp_wk = nssp_wk[~nssp_wk["jurisdiction"].isin(exclude_juris)].copy()
+        nssp_wk["month"] = nssp_wk["week_end"].dt.month
+        split_rows = []
+        for season in sorted(nssp_wk["season"].unique()):
+            g = nssp_wk[nssp_wk["season"] == season]
+            early_shares, late_shares = [], []
+            for _, gs in g.groupby("jurisdiction"):
+                total = gs["rsv_pct"].sum()
+                if total <= 0:
+                    continue
+                early = gs.loc[gs["month"].isin([7, 8, 9]), "rsv_pct"].sum() / total
+                late = gs.loc[gs["month"].isin([4, 5, 6]), "rsv_pct"].sum() / total
+                early_shares.append(early)
+                late_shares.append(late)
+            mean_early = float(np.mean(early_shares)) * 100 if early_shares else np.nan
+            mean_late = float(np.mean(late_shares)) * 100 if late_shares else np.nan
+            n_states = len(early_shares)
+            split_rows.append(
+                {
+                    "season": season,
+                    "n_states": n_states,
+                    "mean_early_out_of_window_pct": mean_early,
+                    "mean_late_out_of_window_pct": mean_late,
+                }
+            )
+            add(
+                f"  NSSP {season}: mean early-season (Jul-Sep) = {mean_early:.1f}% "
+                f"of total seasonal RSV activity; mean late-season (Apr-Jun) = "
+                f"{mean_late:.1f}% (N = {n_states} jurisdictions)"
+            )
+        # persist a reproducible table for the Figure 1 legend
+        pd.DataFrame(split_rows).to_csv(
+            tables / "nssp_out_of_window_early_late_split.csv", index=False
+        )
+    else:
+        add("  [processed NSSP data not available; run the pipeline first]")
+
+    add()
+
+    # -----------------------------------------------------------------------
     # SECTION 2: Window coverage comparison
     # -----------------------------------------------------------------------
     add("PARAGRAPH 2 - Alternative Window Scenarios")

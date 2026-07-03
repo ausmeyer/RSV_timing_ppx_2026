@@ -30,10 +30,13 @@ Figures (`results/figures/`, PNG + PDF; publication copies in
 
 1. `fig1_choropleth_grid` - out-of-window RSV fraction by state and season
 2. `fig2_ridgeline_nssp_seasons` - distribution of out-of-window activity
-3. `fig3_infant_ppx_september_vs_april_advantage` - September vs April window
-   advantage across stress-test scenarios (including the rapid-waning sensitivity)
-4. `fig4_infant_ppx_hospitalizations_averted_early_vs_baseline` - per-state
-   hospitalizations averted, September start, 100% uptake
+3. `fig3_infant_ppx_early_start_advantage_forest` - forest plot of the
+   difference in activity-weighted infant protection between each broadened
+   window (September-March, October-April, year-round) and the October-March
+   baseline, across stress-test scenarios (including the rapid-waning sensitivity)
+4. `fig4_infant_ppx_hospitalizations_averted_by_window` - per-state
+   hospitalizations averted by window (September-March, October-April,
+   year-round) vs the October-March baseline, 100% uptake
 5. `fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake` - national
    hospitalizations averted, primary model (A) vs 100% uptake (B)
 

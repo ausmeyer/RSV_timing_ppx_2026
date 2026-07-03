@@ -6,7 +6,8 @@
 #   Figure 1: choropleth grid of out-of-window RSV fraction
 #   Figure 2: ridgeline densities by season and age group
 #   Figure 3: window advantage over Oct-March baseline across stress-test scenarios
-#   Figure 4: national hospitalizations averted, primary model vs 100% uptake
+#   Figure 4: per-state hospitalizations averted by window (100% uptake)
+#   Figure 5: national hospitalizations averted, primary model vs 100% uptake (panels A/B)
 #   Supplementary: state-level time series
 #
 
@@ -227,7 +228,9 @@ plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_la
       by = c("jurisdiction", "source", "season")
     )
 
-  vmax <- min(quantile(combined$outside_fraction, 0.95, na.rm = TRUE), 0.25)
+  # Use the full observed range so high out-of-window states (up to ~43% in
+  # 2025-2026) remain distinguishable rather than saturating at a hard cap.
+  vmax <- max(combined$outside_fraction, na.rm = TRUE)
 
   p <- ggplot(joined) +
     geom_sf(aes(fill = outside_fraction), color = "gray70", linewidth = 0.15) +
@@ -462,7 +465,7 @@ plot_infant_ppx_window_advantage_forest <- function(stress_state) {
       plot.margin = margin(t = 20, r = 14, b = 26, l = 5)
     )
 
-  save_plot(p, "fig3_infant_ppx_september_vs_april_advantage", width = 8, height = 6)
+  save_plot(p, "fig3_infant_ppx_early_start_advantage_forest", width = 8, height = 6)
   invisible(p)
 }
 
@@ -565,7 +568,7 @@ plot_infant_hospitalizations_averted_ab <- function(primary_dfs, full_dfs) {
     ggplot(d, aes(x = season, y = hosp, fill = window)) +
       geom_col(position = position_dodge(0.75), width = 0.66) +
       geom_text(aes(y = pmax(hosp, 0),
-                    label = formatC(hosp, format = "d", big.mark = ",")),
+                    label = formatC(as.integer(round(hosp)), format = "d", big.mark = ",")),
                 position = position_dodge(0.75), vjust = -0.4, size = 3) +
       scale_fill_manual(values = win_colors, breaks = win_levels) +
       scale_y_continuous(expand = expansion(mult = c(0.05, 0.16))) +
@@ -667,7 +670,7 @@ plot_infant_hospitalizations_averted(
     "October-April"   = maybe_table("infant_ppx_hospitalizations_averted_late_vs_baseline"),
     "Year-round"      = maybe_table("infant_ppx_hospitalizations_averted_year_round_vs_baseline")
   ),
-  "fig4_infant_ppx_hospitalizations_averted_early_vs_baseline"
+  "fig4_infant_ppx_hospitalizations_averted_by_window"
 )
 
 # Figure 5: national hospitalizations averted, three windows, primary vs 100% uptake (panels A/B)
@@ -699,8 +702,8 @@ dir.create(final_dir, recursive = TRUE, showWarnings = FALSE)
 final_figures <- c(
   "fig1_choropleth_grid"                                            = "fig1_choropleth_grid",
   "fig2_ridgeline_nssp_seasons"                                     = "fig2_ridgeline_nssp_seasons",
-  "fig3_infant_ppx_september_vs_april_advantage"                    = "fig3_infant_ppx_september_vs_april_advantage",
-  "fig4_infant_ppx_hospitalizations_averted_early_vs_baseline"      = "fig4_infant_ppx_hospitalizations_averted_early_vs_baseline",
+  "fig3_infant_ppx_early_start_advantage_forest"                    = "fig3_infant_ppx_early_start_advantage_forest",
+  "fig4_infant_ppx_hospitalizations_averted_by_window"      = "fig4_infant_ppx_hospitalizations_averted_by_window",
   "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake" = "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake"
 )
 for (src in names(final_figures)) {

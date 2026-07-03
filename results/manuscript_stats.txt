@@ -48,6 +48,13 @@ Out-of-Window Fractions:
     - Top 5: North Dakota (40.5%), Montana (39.4%), Vermont (29.8%), Maine (28.8%), West Virginia (26.6%)
     - Bootstrap 95% CI for median: [11.9%, 15.9%]
 
+PARAGRAPH 1b - Out-of-Window Early vs Late Split, NSSP (Figure 1 legend)
+--------------------------------------------------------------------------------
+
+  NSSP 2023-2024: mean early-season (Jul-Sep) = 3.7% of total seasonal RSV activity; mean late-season (Apr-Jun) = 3.6% (N = 51 jurisdictions)
+  NSSP 2024-2025: mean early-season (Jul-Sep) = 1.5% of total seasonal RSV activity; mean late-season (Apr-Jun) = 7.5% (N = 51 jurisdictions)
+  NSSP 2025-2026: mean early-season (Jul-Sep) = 1.8% of total seasonal RSV activity; mean late-season (Apr-Jun) = 17.5% (N = 51 jurisdictions)
+
 PARAGRAPH 2 - Alternative Window Scenarios
 --------------------------------------------------------------------------------
 
