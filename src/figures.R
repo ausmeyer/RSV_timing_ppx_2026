@@ -452,7 +452,6 @@ plot_infant_ppx_window_advantage_forest <- function(stress_state) {
     theme_minimal(base_size = 13) +
     theme(
       panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_blank(),
       # Float the legend at the top-right of the panel so it can be moved down
       # freely by lowering the y in legend.position (panel coords: 1 = top,
       # 0 = bottom) without adding any top margin/whitespace.
@@ -570,7 +569,7 @@ plot_infant_hospitalizations_averted_ab <- function(primary_dfs, full_dfs) {
                 position = position_dodge(0.75), vjust = -0.4, size = 3) +
       scale_fill_manual(values = win_colors, breaks = win_levels) +
       scale_y_continuous(expand = expansion(mult = c(0.05, 0.16))) +
-      labs(x = "Season", y = y_title, fill = NULL) +
+      labs(x = NULL, y = y_title, fill = NULL) +
       theme_minimal(base_size = 12) +
       theme(panel.grid.minor = element_blank(),
             panel.grid.major.x = element_blank())
