@@ -108,7 +108,7 @@ analysis:
 #   baseline_oct_mar: Oct 1 - Mar 31
 #   early_sep_mar:    Sep 1 - Mar 31
 #   late_oct_apr:     Oct 1 - Apr 30
-#   extended_sep_apr: Sep 1 - Apr 30
+#   year_round:       Jul 1 - Jun 30 (evaluated at steady state)
 
 # Infant prophylaxis protection model. This is a deliberately explainable
 # visit-opportunity model: births are uniform by day, eligible infants receive
