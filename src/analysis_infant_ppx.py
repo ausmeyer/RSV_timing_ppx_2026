@@ -768,7 +768,7 @@ def create_primary_parameter_table(config: dict) -> pd.DataFrame:
             "parameter": "Birth distribution",
             "value": "Uniform across days",
             "source": "Modeling assumption",
-            "rationale": "First-order assumption; sensitivity tested via cohort weighting",
+            "rationale": "First-order assumption",
             "source_detail": general_sources["uniform_births_source"],
         },
         {
