@@ -28,7 +28,7 @@ make verify
 ## Outputs
 
 - `results/figures/`: manuscript Figures 1-5 and Supplemental Figures S1-S2
-- `results/tables/`: the 12 tables needed to verify the reported results and figures
+- `results/tables/`: the 13 tables needed to verify the reported results and figures
 - `results/manuscript_stats.txt`: a readable summary of the reported statistics
 
 All data and generated outputs are ignored by Git. The published primary model is

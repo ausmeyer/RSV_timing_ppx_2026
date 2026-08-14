@@ -497,13 +497,23 @@ def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
     logger.info("RSV TIMING 2025-26 EXTENSION PIPELINE")
     logger.info(f"Started at: {datetime.now().isoformat()}")
 
-    from src.data_contract import load_cdc, load_census
+    from src.data_contract import (
+        load_cdc,
+        load_census,
+        require_prepared_state_geometry,
+    )
     from src.pull_nssp import log_row_counts as log_nssp_rows
     from src.pull_nhsn import log_row_counts as log_nhsn_rows
     from src.build_seasons import build_seasons, save_processed
     from src.analysis_burden import run_burden_analysis
-    from src.analysis_infant_ppx import run_infant_ppx_analysis
+    from src.analysis_infant_ppx import (
+        create_primary_parameter_table,
+        run_infant_ppx_analysis,
+    )
     config = load_config()
+    # Figure 1 must use the explicit local 51-jurisdiction geometry cache. In
+    # offline mode, fail before clearing any existing generated outputs.
+    require_prepared_state_geometry()
     reset_generated_outputs()
     labels_cfg = config.get("labels", {})
     nssp_metric_label = labels_cfg.get(
@@ -663,6 +673,10 @@ def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
         stress_state_parts = []
 
         config_primary = primary_config(12, "Primary model")
+        save_table(
+            create_primary_parameter_table(config_primary),
+            "infant_ppx_model_parameters",
+        )
         logger.info("  Primary model, 12-month exposure censor")
         primary_parts = run_model_pair(config_primary)
         stress_state_parts.extend(tag_stress_state(

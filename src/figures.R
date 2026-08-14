@@ -21,8 +21,6 @@ suppressPackageStartupMessages({
   library(lubridate)
 })
 
-has_sf      <- requireNamespace("sf",       quietly = TRUE)
-has_maps    <- requireNamespace("maps",     quietly = TRUE)
 has_ridges  <- requireNamespace("ggridges", quietly = TRUE)
 has_arrow   <- requireNamespace("arrow",    quietly = TRUE)
 
@@ -98,12 +96,6 @@ read_table <- function(name) {
   read_csv(path, show_col_types = FALSE)
 }
 
-maybe_table <- function(name) {
-  path <- file.path(root, "results", "tables", paste0(name, ".csv"))
-  if (!file.exists(path)) return(NULL)
-  read_csv(path, show_col_types = FALSE)
-}
-
 read_processed <- function(prefix) {
   csv <- file.path(root, "data", "processed", paste0(prefix, "_processed.csv"))
   pq  <- file.path(root, "data", "processed", paste0(prefix, "_processed.parquet"))
@@ -121,38 +113,35 @@ rename_geometry <- function(sf_obj) {
   sf_obj
 }
 
-# State geometry for the choropleths. Prefer tigris, which includes Alaska and
-# Hawaii repositioned as insets via shift_geometry(); fall back to the lower-48
-# maps package if tigris is unavailable. Both are returned already projected
-# (ESRI:102003), so the plot displays them with coord_sf(datum = NA).
+# State geometry for the choropleths is downloaded by `make data` and kept with
+# the other ignored public inputs. Figure 1 requires all 50 states and DC.
 get_states_sf <- function() {
-  if (!has_sf) {
-    message("Skipping choropleth: 'sf' not installed.")
-    return(NULL)
-  }
+  if (!requireNamespace("sf", quietly = TRUE)) stop("Required package missing: sf")
+
   keep <- c(state.name, "District of Columbia")
-
-  if (requireNamespace("tigris", quietly = TRUE)) {
-    options(tigris_use_cache = TRUE)
-    states <- tryCatch({
-      st <- suppressMessages(tigris::states(cb = TRUE, resolution = "20m", year = 2022))
-      st <- st[st$NAME %in% keep, ]
-      st <- tigris::shift_geometry(st)            # Alaska/Hawaii as insets
-      mutate(st, jurisdiction = normalize_state_names(NAME))
-    }, error = function(e) NULL)
-    if (!is.null(states)) return(rename_geometry(states))
+  geometry_cfg <- config$analysis_data$state_geometry
+  if (is.null(geometry_cfg$filename)) {
+    stop("analysis_data.state_geometry.filename is not configured")
+  }
+  geometry_path <- file.path(root, "data", "raw", geometry_cfg$filename)
+  if (!file.exists(geometry_path)) {
+    stop(paste("Required Census state geometry not found:", geometry_path,
+               "Run `make data` first."))
   }
 
-  if (!has_maps) {
-    message("Skipping choropleth: install 'tigris' or 'maps'.")
-    return(NULL)
+  states <- readRDS(geometry_path) |>
+    filter(NAME %in% keep)
+  missing_states <- setdiff(keep, states$NAME)
+  if (nrow(states) != length(keep) || length(missing_states)) {
+    stop(paste(
+      "Census state geometry must contain exactly 50 states and DC; missing:",
+      paste(missing_states, collapse = ", ")
+    ))
   }
-  mp <- maps::map("state", plot = FALSE, fill = TRUE)
-  sf_obj <- sf::st_as_sf(mp) |>
-    mutate(jurisdiction = normalize_state_names(ID))
-  sf::st_crs(sf_obj) <- 4326
-  sf_obj <- sf::st_transform(sf_obj, "ESRI:102003")
-  rename_geometry(sf_obj)
+
+  states <- states |>
+    mutate(jurisdiction = normalize_state_names(NAME))
+  rename_geometry(states)
 }
 
 # =============================================================================
@@ -582,9 +571,9 @@ nssp_outside   <- read_table("nssp_outside_fraction_by_state")
 nhsn_outside   <- read_table("nhsn_outside_fraction_by_state")
 nssp_processed <- read_processed("nssp")
 nhsn_processed <- read_processed("nhsn")
-infant_stress  <- maybe_table("infant_ppx_stress_test_window_summary")
-hosp_averted   <- maybe_table("infant_ppx_hospitalizations_averted")
-hosp_summary   <- maybe_table("infant_ppx_hospitalizations_averted_summary")
+infant_stress  <- read_table("infant_ppx_stress_test_window_summary")
+hosp_averted   <- read_table("infant_ppx_hospitalizations_averted")
+hosp_summary   <- read_table("infant_ppx_hospitalizations_averted_summary")
 
 # Start from a clean figure directory so no stale outputs remain.
 unlink(list.files(fig_dir, pattern = "\\.(png|pdf)$", full.names = TRUE))

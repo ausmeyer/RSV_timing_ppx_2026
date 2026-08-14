@@ -123,9 +123,7 @@ PARAMETER_SOURCE_ROWS = {
         "days, used as a first-week newborn dosing proxy."
     ),
     "birth_weight_scheme": (
-        "Base case assumes uniform daily births. The seasonal-national sensitivity "
-        "uses transparent monthly birth multipliers to test whether mild U.S. "
-        "birth seasonality changes the window ranking."
+        "The primary model assumes uniform daily births."
     ),
     "birth_month_weight_multipliers": (
         "Scenario multipliers for the seasonal-national birth sensitivity. Use "
@@ -153,10 +151,8 @@ GENERAL_SOURCE_ROWS = [
     ),
     (
         "uniform_births_source",
-        "Uniform daily births are the main simplifying assumption. The robustness "
-        "analysis includes a mild national seasonal birth-weight sensitivity; CDC "
-        "WONDER Natality can provide state-month birth counts if this is expanded "
-        "to an empirical state-specific sensitivity."
+        "Uniform daily births are the primary model's simplifying birth-distribution "
+        "assumption."
     ),
     (
         "routine_visit_source",
@@ -734,34 +730,148 @@ def _summarise_birth_month(cohort_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _parameter_table(model_cfg: dict, datasource: str, value_col: str, metric_label: str) -> pd.DataFrame:
-    rows = []
-    for key, value in model_cfg.items():
-        rows.append({
-            "datasource": datasource,
-            "value_col": value_col,
-            "metric_label": metric_label,
-            "parameter": key,
-            "value": value if not isinstance(value, list) else ",".join(str(v) for v in value),
-        })
-        source = PARAMETER_SOURCE_ROWS.get(key)
-        if source:
-            rows.append({
-                "datasource": datasource,
-                "value_col": value_col,
-                "metric_label": metric_label,
-                "parameter": f"{key}_source",
-                "value": source,
-            })
+def create_primary_parameter_table(config: dict) -> pd.DataFrame:
+    """Build the datasource-independent provenance table behind manuscript Table 2."""
+    model = config["infant_ppx_model"]
+    translation = config["infant_hospitalization_translation"]
+    general_sources = dict(GENERAL_SOURCE_ROWS)
+    uptake_pct = 100 * float(model["uptake"])
+    newborn_pct = 100 * float(model["newborn_first_week_dose_probability"])
+    on_time_pct = 100 * float(model["routine_visit_on_time_probability"])
+    delayed_pct = 100 - on_time_pct
+    risk_per_1000 = float(
+        translation["baseline_hospitalization_risk_per_1000_infants"]
+    )
 
-    for parameter, value in GENERAL_SOURCE_ROWS:
-        rows.append({
-            "datasource": datasource,
-            "value_col": value_col,
-            "metric_label": metric_label,
-            "parameter": parameter,
-            "value": value,
-        })
+    rows = [
+        {
+            "parameter": "Prophylaxis windows compared",
+            "value": (
+                "October-March (baseline); September-March; October-April; "
+                "year-round"
+            ),
+            "source": "Current CDC/ACIP guidance",
+            "rationale": "Operationally simple, calendar-defined alternatives",
+            "source_detail": general_sources["seasonal_window_source"],
+        },
+        {
+            "parameter": "Primary timing curve",
+            "value": "NSSP RSV-associated ED activity",
+            "source": "CDC National Syndromic Surveillance Program",
+            "rationale": (
+                "ED activity proxies community infection risk more closely than "
+                "admissions"
+            ),
+            "source_detail": general_sources["state_epidemic_curve_source"],
+        },
+        {
+            "parameter": "Birth distribution",
+            "value": "Uniform across days",
+            "source": "Modeling assumption",
+            "rationale": "First-order assumption; sensitivity tested via cohort weighting",
+            "source_detail": general_sources["uniform_births_source"],
+        },
+        {
+            "parameter": "Eligibility",
+            "value": f"Age <{model['eligibility_max_age_months']} months",
+            "source": "CDC/ACIP infant RSV antibody guidance",
+            "rationale": "First RSV season per current recommendations",
+            "source_detail": PARAMETER_SOURCE_ROWS["eligibility_max_age_months"],
+        },
+        {
+            "parameter": "Exposure censor",
+            "value": (
+                f"{model['exposure_censor_age_months']} months (primary); "
+                "8 months (sensitivity)"
+            ),
+            "source": "Modeling definition",
+            "rationale": (
+                "Captures first-year infant risk; 8-month variant aligns with "
+                "eligibility-age framing"
+            ),
+            "source_detail": PARAMETER_SOURCE_ROWS["exposure_censor_age_months"],
+        },
+        {
+            "parameter": "Uptake",
+            "value": (
+                f"{uptake_pct:g}% (primary); 50%, 75%, 100% (sensitivity)"
+            ),
+            "source": "Boundy et al., MMWR 2025",
+            "rationale": (
+                "2023-2024 implementation anchor with idealized stress scenarios"
+            ),
+            "source_detail": PARAMETER_SOURCE_ROWS["uptake"],
+        },
+        {
+            "parameter": "Newborn/first-week dosing pathway",
+            "value": f"{newborn_pct:g}% of recipients",
+            "source": "Boundy et al., MMWR 2025",
+            "rationale": (
+                "2023-2024 birth-hospitalization and first-week delivery share"
+            ),
+            "source_detail": PARAMETER_SOURCE_ROWS[
+                "newborn_first_week_dose_probability"
+            ],
+        },
+        {
+            "parameter": "Routine well-child visits",
+            "value": "Newborn, 1, 2, 4, 6 months",
+            "source": "AAP periodicity schedule",
+            "rationale": "Standard preventive-care opportunities",
+            "source_detail": PARAMETER_SOURCE_ROWS["well_child_visit_days"],
+        },
+        {
+            "parameter": "Visit timing distribution",
+            "value": (
+                f"{on_time_pct:g}% on schedule; {delayed_pct:g}% delayed by "
+                f"{model['routine_visit_delay_days']} days"
+            ),
+            "source": "NCQA HEDIS W30",
+            "rationale": (
+                "Adherence anchor for imperfect routine-care timing in 2023 "
+                "Medicaid cohort"
+            ),
+            "source_detail": (
+                PARAMETER_SOURCE_ROWS["routine_visit_on_time_probability"]
+                + " "
+                + PARAMETER_SOURCE_ROWS["routine_visit_delay_days"]
+            ),
+        },
+        {
+            "parameter": "Time to protection onset",
+            "value": f"{model['protection_delay_days']} days post-receipt",
+            "source": "Beyfortus prescribing information",
+            "rationale": "Median time to maximum nirsevimab concentration",
+            "source_detail": PARAMETER_SOURCE_ROWS["protection_delay_days"],
+        },
+        {
+            "parameter": "Effectiveness curve",
+            "value": (
+                "Smoothed time-varying effectiveness through day "
+                f"{model['protection_duration_days']}"
+            ),
+            "source": "Moline et al., JAMA Pediatrics 2026",
+            "rationale": "Post-licensure effectiveness against RSV hospitalization",
+            "source_detail": PARAMETER_SOURCE_ROWS["efficacy_curve_points"],
+        },
+        {
+            "parameter": "Untreated infant RSV hospitalization risk",
+            "value": f"{risk_per_1000:.2f} per 1000 infant-seasons",
+            "source": "Pelletier et al., JAMA Network Open 2025",
+            "rationale": "Denominator for expected hospitalizations averted",
+            "source_detail": translation["burden_source"],
+        },
+        {
+            "parameter": "Infant population denominator",
+            "value": (
+                "State age-under-1 resident population, "
+                f"{translation['infant_population_year']}"
+            ),
+            "source": "U.S. Census Bureau Population Estimates Program",
+            "rationale": "State-specific scaling",
+            "source_detail": translation["population_source"],
+        },
+    ]
     return pd.DataFrame(rows)
 
 
@@ -777,7 +887,7 @@ def run_infant_ppx_analysis(
     Run infant prophylaxis protection analysis for one data source.
 
     Returns:
-        Dictionary with state_summary, birth_month_summary, and parameters.
+        Dictionary with state_summary and birth_month_summary.
     """
     if config is None:
         config = load_config()
@@ -794,7 +904,6 @@ def run_infant_ppx_analysis(
         return {
             "state_summary": empty,
             "birth_month_summary": empty,
-            "parameters": _parameter_table(model_cfg, datasource, value_col, metric_label),
         }
 
     cohort_parts = []
@@ -815,7 +924,6 @@ def run_infant_ppx_analysis(
         return {
             "state_summary": empty,
             "birth_month_summary": empty,
-            "parameters": _parameter_table(model_cfg, datasource, value_col, metric_label),
         }
 
     cohort_df = pd.concat(cohort_parts, ignore_index=True)
@@ -865,5 +973,4 @@ def run_infant_ppx_analysis(
     return {
         "state_summary": state_summary,
         "birth_month_summary": birth_month_summary,
-        "parameters": _parameter_table(model_cfg, datasource, value_col, metric_label),
     }

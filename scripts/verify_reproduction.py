@@ -2,6 +2,7 @@
 """Verify the small set of outputs used by the accepted manuscript."""
 
 from pathlib import Path
+from zipfile import ZipFile
 
 import pandas as pd
 import yaml
@@ -15,6 +16,7 @@ EXPECTED_TABLES = {
     "bootstrap_ci_summary.csv",
     "infant_ppx_hospitalizations_averted.csv",
     "infant_ppx_hospitalizations_averted_summary.csv",
+    "infant_ppx_model_parameters.csv",
     "infant_ppx_stress_test_ranking.csv",
     "infant_ppx_stress_test_window_summary.csv",
     "longitudinal_consistency.csv",
@@ -65,6 +67,51 @@ def main() -> None:
     require(model["uptake"] == 0.185, "Primary uptake must be encoded as 18.5%.")
     require(model["efficacy_profile"] == "piecewise_linear", "Primary efficacy profile mismatch.")
     require(model["protection_duration_days"] == 210, "Primary protection duration mismatch.")
+
+    parameters = pd.read_csv(TABLES / "infant_ppx_model_parameters.csv")
+    expected_parameters = {
+        "Prophylaxis windows compared",
+        "Primary timing curve",
+        "Birth distribution",
+        "Eligibility",
+        "Exposure censor",
+        "Uptake",
+        "Newborn/first-week dosing pathway",
+        "Routine well-child visits",
+        "Visit timing distribution",
+        "Time to protection onset",
+        "Effectiveness curve",
+        "Untreated infant RSV hospitalization risk",
+        "Infant population denominator",
+    }
+    require(
+        set(parameters["parameter"]) == expected_parameters,
+        "Parameter provenance table does not match manuscript Table 2.",
+    )
+    require(
+        parameters[["value", "source", "rationale", "source_detail"]]
+        .notna()
+        .all()
+        .all(),
+        "Parameter provenance table contains missing values.",
+    )
+    parameter_values = parameters.set_index("parameter")["value"].to_dict()
+    require("18.5%" in parameter_values["Uptake"], "Parameter table uptake mismatch.")
+    require("210" in parameter_values["Effectiveness curve"], "Parameter table duration mismatch.")
+    require("38.1%" in parameter_values["Newborn/first-week dosing pathway"], "Parameter table newborn pathway mismatch.")
+    require("59%" in parameter_values["Visit timing distribution"], "Parameter table visit-timing mismatch.")
+
+    geometry_cfg = config["analysis_data"]["state_geometry"]
+    geometry_path = ROOT / "data" / "raw" / geometry_cfg["filename"]
+    require(geometry_path.is_file(), "Missing prepared Census state geometry.")
+    geometry_source = ROOT / "data" / "raw" / geometry_cfg["source_filename"]
+    require(geometry_source.is_file(), "Missing cached Census state-geometry source.")
+    with ZipFile(geometry_source) as archive:
+        suffixes = {Path(name).suffix.lower() for name in archive.namelist()}
+    require(
+        {".shp", ".shx", ".dbf", ".prj"}.issubset(suffixes),
+        "Cached Census state geometry is incomplete.",
+    )
 
     nssp = pd.read_csv(TABLES / "nssp_outside_fraction_by_state.csv")
     nhsn = pd.read_csv(TABLES / "nhsn_outside_fraction_by_state.csv")

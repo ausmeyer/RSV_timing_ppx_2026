@@ -49,6 +49,10 @@ analysis_data:
   census:
     filename: "us_state_infant_population_2023_census_pep.csv"
     url: "https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/state/asrh/sc-est2023-alldata6.csv"
+  state_geometry:
+    source_filename: "cb_2022_us_state_20m.zip"
+    filename: "us_states_2022_shifted.rds"
+    url: "https://www2.census.gov/geo/tiger/GENZ2022/shp/cb_2022_us_state_20m.zip"
 
 # Season definitions (July-June to capture early summer activity)
 # 3 full NSSP seasons; 2025-26 ends June 30 2026 (data may lag 2-4 weeks)

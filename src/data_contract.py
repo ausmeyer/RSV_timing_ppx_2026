@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from io import BytesIO
 from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
 import pandas as pd
 import requests
@@ -122,6 +123,58 @@ def load_census(*, offline: bool = False, refresh: bool = False) -> pd.DataFrame
     return frame
 
 
+def _validate_state_geometry(path: Path) -> None:
+    """Confirm that the cached Census archive contains a complete shapefile."""
+    required_suffixes = {".shp", ".shx", ".dbf", ".prj"}
+    try:
+        with ZipFile(path) as archive:
+            suffixes = {Path(name).suffix.lower() for name in archive.namelist()}
+    except BadZipFile as exc:
+        raise ValueError(f"Invalid Census state-geometry archive: {path}") from exc
+    missing = sorted(required_suffixes - suffixes)
+    if missing:
+        raise ValueError(
+            f"Census state-geometry archive is missing components: {missing}"
+        )
+
+
+def load_state_geometry(*, offline: bool = False, refresh: bool = False) -> Path:
+    """Load the Census archive used to prepare Figure 1 state geometry."""
+    config = load_config()
+    contract = config["analysis_data"]["state_geometry"]
+    path = DATA_RAW / contract["source_filename"]
+    if path.exists() and not refresh:
+        _validate_state_geometry(path)
+        return path
+    if offline:
+        raise FileNotFoundError(
+            f"Missing Census state geometry: {path}. Run `make data` first."
+        )
+
+    response = requests.get(contract["url"], timeout=120)
+    response.raise_for_status()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(response.content)
+    try:
+        _validate_state_geometry(path)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return path
+
+
+def require_prepared_state_geometry() -> Path:
+    """Require the fully prepared geometry used by offline figure generation."""
+    config = load_config()
+    contract = config["analysis_data"]["state_geometry"]
+    path = DATA_RAW / contract["filename"]
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Missing prepared Census state geometry: {path}. Run `make data` first."
+        )
+    return path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--offline", action="store_true")
@@ -130,6 +183,7 @@ def main() -> None:
     load_cdc("nssp", offline=args.offline, refresh=args.refresh)
     load_cdc("nhsn", offline=args.offline, refresh=args.refresh)
     load_census(offline=args.offline, refresh=args.refresh)
+    load_state_geometry(offline=args.offline, refresh=args.refresh)
     print("Analysis inputs are ready.")
 
 

@@ -10,12 +10,14 @@ setup:
 
 reproduce:
 	$(PYTHON) -m src.data_contract --refresh
+	Rscript scripts/prepare_state_geometry.R --refresh
 	$(PYTHON) -m src.run_pipeline --offline
 	$(PYTHON) -m src.manuscript_stats
 	$(PYTHON) scripts/verify_reproduction.py
 
 data:
 	$(PYTHON) -m src.data_contract --refresh
+	Rscript scripts/prepare_state_geometry.R --refresh
 
 analysis: data
 	$(PYTHON) -m src.run_pipeline --offline
