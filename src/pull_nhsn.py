@@ -8,7 +8,7 @@ and caching to parquet files.
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -261,96 +261,6 @@ def cache_schema(schema: dict) -> Path:
     return filepath
 
 
-def get_cached_file(max_age_days: Optional[int] = 1) -> Optional[Path]:
-    """
-    Find most recent cached data file within age limit.
-
-    Args:
-        max_age_days: Maximum age of cache in days. If None, use the most
-            recent cache file regardless of age.
-
-    Returns:
-        Path to cached file if found and fresh, None otherwise
-    """
-    if not DATA_RAW.exists():
-        return None
-
-    parquet_files = list(DATA_RAW.glob("nhsn_raw_*.parquet"))
-
-    if not parquet_files:
-        return None
-
-    parquet_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-
-    most_recent = parquet_files[0]
-    mtime = datetime.fromtimestamp(most_recent.stat().st_mtime)
-    age = datetime.now() - mtime
-
-    if max_age_days is None:
-        logger.info(f"Using cached data from {most_recent} (age: {age}; age check disabled)")
-        return most_recent
-
-    if age <= timedelta(days=max_age_days):
-        logger.info(f"Using cached data from {most_recent} (age: {age})")
-        return most_recent
-
-    logger.info(f"Cache too old ({age}), will fetch fresh data")
-    return None
-
-
-def load_cached_or_fetch(
-    max_age_days: Optional[int] = 1,
-    force_refresh: bool = False
-) -> pd.DataFrame:
-    """
-    Load cached data if fresh enough, otherwise fetch from Socrata.
-
-    Args:
-        max_age_days: Maximum age of cache in days. If None, use the most
-            recent cache file regardless of age.
-        force_refresh: If True, always fetch fresh data
-
-    Returns:
-        DataFrame with NHSN HRD data
-    """
-    config = load_config()
-    nhsn_config = config["nhsn"]
-    fields = config["nhsn_fields"]
-    # Use nhsn_seasons if defined (broader date range covering 2023-24 through 2025-26)
-    seasons = config.get("nhsn_seasons", config["seasons"])
-
-    start_date = min(s["start"] for s in seasons)
-    end_date = max(s["end"] for s in seasons)
-
-    if not force_refresh:
-        cached_file = get_cached_file(max_age_days)
-        if cached_file:
-            return pd.read_parquet(cached_file)
-
-    schema = fetch_schema(
-        dataset_id=nhsn_config["dataset_id"],
-        base_url=nhsn_config["base_url"],
-        timeout=nhsn_config["timeout"]
-    )
-    validate_schema(schema, fields)
-    cache_schema(schema)
-
-    df = fetch_nhsn(
-        dataset_id=nhsn_config["dataset_id"],
-        base_url=nhsn_config["base_url"],
-        fields=fields,
-        start_date=start_date,
-        end_date=end_date,
-        timeout=nhsn_config["timeout"],
-        max_retries=nhsn_config["max_retries"],
-        page_size=nhsn_config["page_size"]
-    )
-
-    cache_raw_data(df)
-
-    return df
-
-
 def log_row_counts(df: pd.DataFrame) -> None:
     """Log summary statistics about the data."""
     logger.info("NHSN DATA SUMMARY")
@@ -374,13 +284,13 @@ def log_row_counts(df: pd.DataFrame) -> None:
 
 
 def main():
-    """Main entry point for data extraction."""
-    logger.info("Starting NHSN HRD data extraction...")
+    """Validate or download the accepted-manuscript NHSN snapshot."""
+    from src.data_contract import load_cdc
 
-    df = load_cached_or_fetch(max_age_days=1)
+    logger.info("Loading publication NHSN snapshot...")
+    df = load_cdc("nhsn")
     log_row_counts(df)
-
-    logger.info("Data extraction complete.")
+    logger.info("Publication NHSN snapshot validated.")
     return df
 
 

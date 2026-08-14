@@ -35,6 +35,21 @@ nhsn_fields:
   rsv_ped_total: "totalconfrsvnewadmped"
   rsv_total: "totalconfrsvnewadm"
 
+# Publication analysis data contract. Pull the live public data through the
+# last week available for the accepted analysis; never select a cache by age.
+analysis_data:
+  start_date: "2023-07-01"
+  end_date: "2026-06-20"
+  nssp:
+    filename: "nssp_raw_through_20260620.parquet"
+    columns: [week_end, jurisdiction, rsv_pct, rsv_pct_smoothed, covid_pct, flu_pct, combined_pct]
+  nhsn:
+    filename: "nhsn_raw_through_20260620.parquet"
+    columns: [week_end, jurisdiction, rsv_ped_0_4, rsv_ped_total, rsv_total]
+  census:
+    filename: "us_state_infant_population_2023_census_pep.csv"
+    url: "https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/state/asrh/sc-est2023-alldata6.csv"
+
 # Season definitions (July-June to capture early summer activity)
 # 3 full NSSP seasons; 2025-26 ends June 30 2026 (data may lag 2-4 weeks)
 seasons:
@@ -110,19 +125,20 @@ analysis:
 #   late_oct_apr:     Oct 1 - Apr 30
 #   year_round:       Jul 1 - Jun 30 (evaluated at steady state)
 
-# Infant prophylaxis protection model. This is a deliberately explainable
+# Published primary infant prophylaxis protection model. This is a deliberately explainable
 # visit-opportunity model: births are uniform by day, eligible infants receive
 # prophylaxis at the first routine well-child visit that falls inside the
 # scenario window, and protection is evaluated against each state's observed
 # RSV curve.
 infant_ppx_model:
   enabled: true
-  uptake: 1.0
+  scenario_label: "Primary model"
+  uptake: 0.185
   eligibility_max_age_months: 8
   exposure_censor_age_months: 12
   protection_delay_days: 6       # median nirsevimab time to maximum concentration
-  protection_duration_days: 180  # six-month base assumption; 150 days is a sensitivity to consider
-  efficacy_profile: "binary"     # binary or piecewise_linear
+  protection_duration_days: 210
+  efficacy_profile: "piecewise_linear"
   efficacy_curve_points:
     # Optional piecewise_linear profile. Main infant-model figures use this Moline et al.
     # JAMA Pediatrics 2026 hospitalization VE sensitivity with a monotone
@@ -139,6 +155,9 @@ infant_ppx_model:
       efficacy: 0.77
   first_outpatient_visit_days: [7, 14]
   first_outpatient_visit_probabilities: [0.5, 0.5]
+  newborn_first_week_dose_probability: 0.381
+  routine_visit_on_time_probability: 0.59
+  routine_visit_delay_days: 14
   well_child_visit_days: [7, 14, 30.4375, 60.875, 121.75, 182.625]
   birth_weight_scheme: "uniform"  # uniform or seasonal_national
   birth_month_weight_multipliers:
@@ -158,23 +177,6 @@ infant_ppx_model:
     11: 0.98
     12: 0.98
   allow_window_start_catchup: false
-
-# Citable priors for optional "more realistic delivery" sensitivities. These
-# are used in the main infant-model figures. The full citation trail is written to
-# results/tables/infant_ppx_realistic_priors.csv.
-infant_ppx_realistic_priors:
-  nirsevimab_uptake_2023_24: 0.185
-  combined_infant_protection_2024_25: 0.57
-  newborn_first_week_nirsevimab_receipt: 0.381
-  routine_visit_completion_first_15_months: 0.59
-  routine_visit_delay_days: 14
-  medically_attended_rsv_ari_peak_effectiveness: 0.89
-  rsv_hospitalization_peak_effectiveness: 0.93
-  moline_hospitalization_effectiveness_6_29_days: 0.936
-  moline_hospitalization_effectiveness_30_59_days: 0.807
-  moline_hospitalization_effectiveness_60_89_days: 0.790
-  moline_hospitalization_effectiveness_90_129_days: 0.564
-  moline_hospitalization_effectiveness_130_210_days: 0.77
 
 # Translation from modeled protection to expected hospitalizations averted.
 # This keeps the timing model based on state RSV curves and uses external,

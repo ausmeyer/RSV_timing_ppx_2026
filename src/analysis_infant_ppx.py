@@ -55,9 +55,8 @@ WINDOW_LABELS = {
 
 PARAMETER_SOURCE_ROWS = {
     "uptake": (
-        "Scenario parameter. Base case is 100% uptake to isolate timing effects; "
-        "CDC RSVVaxView and Boundy et al. MMWR 2025 provide empirical uptake "
-        "anchors for sensitivity analyses."
+        "Primary model uses 18.5% empirical 2023-24 nirsevimab uptake from "
+        "Boundy et al. MMWR 2025; 100% uptake is an idealized sensitivity."
     ),
     "eligibility_max_age_months": (
         "CDC/ACIP infant RSV antibody guidance recommends protection for eligible "
@@ -76,12 +75,11 @@ PARAMETER_SOURCE_ROWS = {
     "protection_duration_days": (
         "CDC and the Beyfortus label state protection extends through at least "
         "5 months; pivotal efficacy endpoints were evaluated through 150 days. "
-        "The 180-day and 270-day settings are scenario sensitivities."
+        "The primary model uses the published effectiveness curve through 210 days."
     ),
     "efficacy_profile": (
-        "Binary profile estimates fractional time protected. Optional "
-        "piecewise_linear profile uses a smoothed Moline et al. JAMA Pediatrics "
-        "2026 time-since-dose hospitalization effectiveness curve."
+        "The primary piecewise-linear profile uses a smoothed Moline et al. "
+        "JAMA Pediatrics 2026 time-since-dose hospitalization effectiveness curve."
     ),
     "efficacy_curve_points": (
         "Scenario curve. Day 6 uses the Moline et al. JAMA Pediatrics 2026 "
@@ -168,184 +166,9 @@ GENERAL_SOURCE_ROWS = [
     ),
 ]
 
-REALISTIC_PRIOR_ROWS = [
-    {
-        "assumption": "uptake_nirsevimab_2023_24",
-        "recommended_value": "0.185",
-        "units": "proportion of infants",
-        "use_in_model": "Sensitivity value for infant nirsevimab uptake under 2023-24 implementation.",
-        "source_type": "CDC/MMWR surveillance",
-        "citation": (
-            "Boundy EO, Fast H, Jatlaoui TC, et al. Respiratory Syncytial Virus "
-            "Immunization Coverage Among Infants Through Receipt of Nirsevimab "
-            "Monoclonal Antibody or Maternal Vaccination - United States, October "
-            "2023-March 2024. MMWR Morb Mortal Wkly Rep. 2025;74(31):484-489."
-        ),
-        "url": "https://www.cdc.gov/mmwr/volumes/74/wr/mm7431a3.htm",
-        "note": (
-            "The first U.S. season had supply constraints, so this is an empirical "
-            "lower-bound implementation scenario rather than a desired steady-state value."
-        ),
-    },
-    {
-        "assumption": "combined_infant_protection_2024_25",
-        "recommended_value": "0.57",
-        "units": "proportion of infants",
-        "use_in_model": (
-            "Alternative uptake prior if modeling total infant protection from "
-            "nirsevimab or maternal RSV vaccination rather than infant nirsevimab alone."
-        ),
-        "source_type": "CDC/ACIP implementation data",
-        "citation": (
-            "CDC ACIP presentation, June 2025: Preliminary estimates of 2024-25 "
-            "infant RSV protection through maternal vaccination or nirsevimab."
-        ),
-        "url": "https://www.cdc.gov/acip/downloads/slides-2025-06-25-26/02-Peacock-Mat-Peds-RSV-508.pdf",
-        "note": (
-            "Use cautiously for this project because it combines maternal vaccination "
-            "and infant nirsevimab rather than isolating infant prophylaxis."
-        ),
-    },
-    {
-        "assumption": "newborn_first_week_nirsevimab_receipt",
-        "recommended_value": "0.381",
-        "units": "proportion of nirsevimab recipients",
-        "use_in_model": (
-            "Prior for newborn/birth-hospitalization or first-week dosing among infants "
-            "born during the administration window."
-        ),
-        "source_type": "CDC/MMWR surveillance",
-        "citation": (
-            "Boundy EO, Fast H, Jatlaoui TC, et al. Respiratory Syncytial Virus "
-            "Immunization Coverage Among Infants Through Receipt of Nirsevimab "
-            "Monoclonal Antibody or Maternal Vaccination - United States, October "
-            "2023-March 2024. MMWR Morb Mortal Wkly Rep. 2025;74(31):484-489."
-        ),
-        "url": "https://www.cdc.gov/mmwr/volumes/74/wr/mm7431a3.htm",
-        "note": (
-            "MMWR reports 38.1% of infants receiving nirsevimab received it at age "
-            "0-6 days; this is a first-week dosing proxy, not a pure inpatient-only estimate."
-        ),
-    },
-    {
-        "assumption": "routine_visit_completion_first_15_months",
-        "recommended_value": "0.59",
-        "units": "proportion with >=6 well-child visits",
-        "use_in_model": (
-            "Prior for an on-schedule routine-visit pathway; the complementary share "
-            "can be modeled as delayed or missed routine opportunities."
-        ),
-        "source_type": "CMS/NCQA quality measure",
-        "citation": (
-            "CMS Medicaid and CHIP Child Core Set / NCQA HEDIS W30: Well-Child "
-            "Visits in the First 30 Months of Life, first 15 months, six or more visits."
-        ),
-        "url": "https://www.ncqa.org/hedis/measures/well-child-visits-in-the-first-30-months-of-life/",
-        "note": (
-            "This is a pragmatic visit-adherence prior. It measures completion of "
-            "six or more visits by 15 months, not exact timing of each scheduled visit."
-        ),
-    },
-    {
-        "assumption": "routine_visit_delay_days",
-        "recommended_value": "14",
-        "units": "days",
-        "use_in_model": (
-            "Simple delay applied to the imperfect-visit pathway if we model delayed "
-            "rather than fully missed routine opportunities."
-        ),
-        "source_type": "Scenario calibration",
-        "citation": (
-            "Scenario assumption paired with CMS/NCQA W30 visit-completion data; no "
-            "single national source provides exact delay distributions for every "
-            "recommended infant well-child visit."
-        ),
-        "url": "https://www.ncqa.org/hedis/measures/well-child-visits-in-the-first-30-months-of-life/",
-        "note": "Keep this as a sensitivity parameter, not a directly observed estimate.",
-    },
-    {
-        "assumption": "peak_medically_attended_rsv_ari_effectiveness",
-        "recommended_value": "0.89",
-        "units": "effectiveness",
-        "use_in_model": "Optional endpoint-specific anchor for NSSP/medically attended RSV sensitivity.",
-        "source_type": "Peer-reviewed postlicensure study",
-        "citation": (
-            "Moline HL, Toepfer AP, Tannis A, et al. Respiratory Syncytial Virus "
-            "Disease Burden and Nirsevimab Effectiveness in Young Children From "
-            "2023-2024. JAMA Pediatr. 2025;179(2):179-187. "
-            "doi:10.1001/jamapediatrics.2024.5572."
-        ),
-        "url": "https://jamanetwork.com/journals/jamapediatrics/fullarticle/2827176",
-        "note": "Retained as an optional endpoint-specific anchor; main infant-model figures use the Moline et al. 2026 hospitalization time-since-dose curve.",
-    },
-    {
-        "assumption": "peak_rsv_hospitalization_effectiveness",
-        "recommended_value": "0.93",
-        "units": "effectiveness",
-        "use_in_model": "Optional endpoint-specific peak efficacy anchor for NHSN hospitalization sensitivity.",
-        "source_type": "Peer-reviewed postlicensure study",
-        "citation": (
-            "Moline HL, Toepfer AP, Tannis A, et al. Respiratory Syncytial Virus "
-            "Disease Burden and Nirsevimab Effectiveness in Young Children From "
-            "2023-2024. JAMA Pediatr. 2025;179(2):179-187. "
-            "doi:10.1001/jamapediatrics.2024.5572."
-        ),
-        "url": "https://jamanetwork.com/journals/jamapediatrics/fullarticle/2827176",
-        "note": "Retained as a 2023-24 anchor; main infant-model figures use the later Moline et al. 2026 hospitalization time-since-dose curve.",
-    },
-    {
-        "assumption": "moline_smoothed_time_since_dose_hospitalization_effectiveness",
-        "recommended_value": "0.936 at day 6; 0.807 at day 45; 0.77 at day 210",
-        "units": "effectiveness",
-        "use_in_model": "Smoothed efficacy-weighted sensitivity curve for the main infant-model figures.",
-        "source_type": "Peer-reviewed postlicensure study",
-        "citation": (
-            "Moline HL, Tannis A, Goldstein L, et al. Effectiveness and Impact of "
-            "Maternal RSV Immunization and Nirsevimab on Medically Attended RSV "
-            "in US Children. JAMA Pediatr. 2026;180(3):314-324. "
-            "doi:10.1001/jamapediatrics.2025.5778."
-        ),
-        "url": "https://jamanetwork.com/journals/jamapediatrics/fullarticle/2843213",
-        "note": (
-            "Observed hospitalization VE bins were 93.6% for <30 days, 80.7% for "
-            "30-59 days, 79.0% for 60-89 days, 56.4% for 90-129 days, and 77% "
-            "(95% CI, 42%-92%) for 130-210 days. The modeled curve smooths "
-            "monotonically from the 30-59 day bin to day 210 instead of encoding "
-            "the non-monotone 90-129 dip literally."
-        ),
-    },
-    {
-        "assumption": "late_postdose_hospitalization_effectiveness",
-        "recommended_value": "0.77 at 130-210 days",
-        "units": "effectiveness",
-        "use_in_model": (
-            "Late post-dose anchor used as the day-210 endpoint of the smoothed "
-            "piecewise efficacy curve."
-        ),
-        "source_type": "Peer-reviewed postlicensure study",
-        "citation": (
-            "Moline HL, Tannis A, Goldstein L, et al. Effectiveness and Impact of "
-            "Maternal RSV Immunization and Nirsevimab on Medically Attended RSV "
-            "in US Children. JAMA Pediatr. 2026;180(3):314-324. "
-            "doi:10.1001/jamapediatrics.2025.5778."
-        ),
-        "url": "https://jamanetwork.com/journals/jamapediatrics/fullarticle/2843213",
-        "note": (
-            "This estimate is hospitalization-specific. It is incorporated as the "
-            "day-210 endpoint in the realistic-delivery efficacy curve."
-        ),
-    },
-]
-
-
 def load_config() -> dict:
     with open(CONFIG_PATH) as f:
         return yaml.safe_load(f)
-
-
-def realistic_prior_table() -> pd.DataFrame:
-    """Return citable priors for optional realism sensitivities."""
-    return pd.DataFrame(REALISTIC_PRIOR_ROWS)
 
 
 def _season_bounds(season: str) -> tuple[pd.Timestamp, pd.Timestamp]:
@@ -1016,6 +839,11 @@ def run_infant_ppx_analysis(
         ):
             if _col in state_summary.columns:
                 state_summary.loc[yr_mask, _col] = yr_ss
+        # In a continuously operating year-round program, every modeled dosing
+        # pathway has an eligible visit; receipt therefore equals scenario uptake.
+        state_summary.loc[yr_mask, "share_receiving_ppx"] = state_summary.loc[
+            yr_mask, "uptake"
+        ]
 
     birth_month_summary = (
         _summarise_birth_month(cohort_df)

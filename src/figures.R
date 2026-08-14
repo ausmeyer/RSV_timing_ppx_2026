@@ -264,56 +264,14 @@ plot_choropleth_grid <- function(nssp_outside, nhsn_outside, nssp_label, nhsn_la
 # FIGURE 2: Ridgeline density plots
 # =============================================================================
 
-# Seasons as ridgelines, one facet per NHSN age group.
-# An additional single-panel plot is made for NSSP (all-ages only).
-plot_ridgeline_seasons_by_agegroup <- function(nhsn_strata_df, nssp_outside) {
+# Manuscript Figure 2: NSSP seasons as ridgelines.
+plot_ridgeline_nssp <- function(nssp_outside) {
   if (!has_ridges) {
     message("Skipping ridgeline plots: ggridges not installed.")
     return(invisible(NULL))
   }
   library(ggridges)
 
-  # ------ NHSN: faceted by age group, seasons as ridges ------
-  if (!is.null(nhsn_strata_df) && nrow(nhsn_strata_df) > 0 &&
-      "age_group_label" %in% names(nhsn_strata_df)) {
-
-    df <- nhsn_strata_df |>
-      filter(!is.na(season), !is.na(outside_fraction)) |>
-      mutate(
-        pct = outside_fraction * 100,
-        season = factor(season, levels = rev(sort(unique(season))))
-      )
-
-    p_nhsn <- ggplot(df, aes(x = pct, y = season, fill = season)) +
-      stat_density_ridges(
-        quantile_lines = TRUE, quantiles = 2,
-        alpha = 0.8, bandwidth = 1.5,
-        jittered_points = TRUE,
-        point_shape = "|", point_size = 1.5, point_alpha = 0.6,
-        position = position_points_jitter(height = 0)
-      ) +
-      scale_fill_manual(values = season_colours, guide = "none") +
-      facet_wrap(~age_group_label, scales = "free_y") +
-      labs(
-        x = "Out-of-window RSV activity (%)",
-        y = NULL,
-        title = wrap_title("Distribution of out-of-window RSV fractions by age group (NHSN)")
-      ) +
-      scale_x_continuous(limits = c(0, NA)) +
-      theme_minimal() +
-      theme(
-        strip.text = element_text(size = 9, face = "bold"),
-        plot.title = element_text(size = 11, face = "bold", lineheight = 1.05, margin = margin(b = 8)),
-        axis.text  = element_text(size = 8),
-        panel.grid.minor = element_blank()
-      )
-
-    n_age_groups <- n_distinct(df$age_group_label)
-    save_plot(p_nhsn, "fig2_ridgeline_nhsn_seasons_by_agegroup",
-              width = 5 * min(n_age_groups, 3), height = 5)
-  }
-
-  # ------ NSSP: single panel, seasons as ridges ------
   if (!is.null(nssp_outside) && nrow(nssp_outside) > 0) {
     df_nssp <- nssp_outside |>
       filter(!is.na(season), !is.na(outside_fraction)) |>
@@ -358,53 +316,26 @@ plot_ridgeline_seasons_by_agegroup <- function(nhsn_strata_df, nssp_outside) {
 # Revision Figure 3: protection advantage of each broadened window (September-
 # March, October-April, year-round) over the October-March baseline, shown as a
 # dot-and-whisker forest across stress-test scenarios (median and IQR).
-plot_infant_ppx_window_advantage_forest <- function(stress_state) {
-  if (is.null(stress_state) || nrow(stress_state) == 0) return(invisible(NULL))
-
-  wide <- stress_state |>
-    filter(
-      datasource == "nssp",
-      window_name %in% c("baseline_oct_mar", "early_sep_mar",
-                         "late_oct_apr", "year_round")
-    ) |>
-    select(
-      scenario_id, scenario_order, season, jurisdiction, window_name,
-      population_activity_weighted_protection
-    ) |>
-    pivot_wider(
-      names_from = window_name,
-      values_from = population_activity_weighted_protection
-    ) |>
-    filter(!is.na(baseline_oct_mar))
-
-  if (nrow(wide) == 0) return(invisible(NULL))
-
+plot_infant_ppx_window_advantage_forest <- function(stress_summary) {
+  if (is.null(stress_summary) || nrow(stress_summary) == 0) return(invisible(NULL))
   window_levels <- c("September-March", "October-April", "Year-round")
-  window_cols   <- c("September-March" = "early_sep_mar",
-                     "October-April"   = "late_oct_apr",
-                     "Year-round"      = "year_round")
-  parts <- list()
-  for (wl in window_levels) {
-    col <- window_cols[[wl]]
-    if (col %in% names(wide)) {
-      parts[[length(parts) + 1]] <- wide |>
-        filter(!is.na(.data[[col]])) |>
-        transmute(scenario_id, scenario_order, window = wl,
-                  advantage = (.data[[col]] - baseline_oct_mar) * 100)
-    }
-  }
-  long <- bind_rows(parts)
-  if (nrow(long) == 0) return(invisible(NULL))
-
-  agg <- long |>
-    group_by(scenario_id, scenario_order, window) |>
-    summarise(
-      med = median(advantage),
-      lo  = quantile(advantage, 0.25),
-      hi  = quantile(advantage, 0.75),
-      .groups = "drop"
+  agg <- stress_summary |>
+    filter(datasource == "nssp", window_name != "baseline_oct_mar") |>
+    transmute(
+      scenario_id,
+      scenario_order,
+      window = recode(
+        window_name,
+        early_sep_mar = "September-March",
+        late_oct_apr = "October-April",
+        year_round = "Year-round"
+      ),
+      med = 100 * delta_vs_baseline_oct_mar,
+      lo = 100 * q25_delta_vs_baseline_oct_mar,
+      hi = 100 * q75_delta_vs_baseline_oct_mar
     ) |>
     arrange(scenario_order)
+  if (nrow(agg) == 0) return(invisible(NULL))
 
   labels_map <- c(
     reference_12mo = "Primary Model", censor_8mo = "8-mo censor",
@@ -439,16 +370,19 @@ plot_infant_ppx_window_advantage_forest <- function(stress_state) {
   x_max <- max(abs(c(agg$lo, agg$hi)), na.rm = TRUE) * 1.05
   p <- ggplot(agg, aes(x = med, y = ypos, color = window)) +
     geom_vline(xintercept = 0, color = "grey60") +
-    geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0, show.legend = FALSE) +
+    geom_errorbar(
+      aes(xmin = lo, xmax = hi), orientation = "y", width = 0,
+      show.legend = FALSE
+    ) +
     geom_point(size = 1.5) +
     scale_y_reverse(breaks = seq_along(ordered_ids), labels = level_labels) +
     scale_color_manual(values = win_colors, breaks = present_windows) +
     coord_cartesian(clip = "off", xlim = c(-x_max, x_max)) +
     annotate("text", x = -x_pad, y = -Inf, hjust = 1, vjust = 59,
-             label = "← worse protection than baseline",
+             label = "<- worse protection than baseline",
              size = 3.2, fontface = "italic", color = "grey35") +
     annotate("text", x = x_pad, y = -Inf, hjust = 0, vjust = 59,
-             label = "better protection than baseline →",
+             label = "better protection than baseline ->",
              size = 3.2, fontface = "italic", color = "grey35") +
     labs(x = "Difference from October-March baseline (percentage points)",
          y = NULL, color = NULL) +
@@ -472,29 +406,28 @@ plot_infant_ppx_window_advantage_forest <- function(stress_state) {
 # Figure 4: per-state distribution of expected hospitalizations averted vs the
 # October-March baseline, by season, for three windows (September-March,
 # October-April, year-round) shown as grouped violins (100% uptake).
-plot_infant_hospitalizations_averted <- function(window_dfs, figure_stub) {
+plot_infant_hospitalizations_averted <- function(values, figure_stub) {
   win_colors <- c("September-March" = "#1b6ca8",
                   "October-April"   = "#9aa0a6",
                   "Year-round"      = "#e08a3c")
 
-  prep <- function(df, window_label) {
-    if (is.null(df) || nrow(df) == 0) return(NULL)
-    df |>
-      filter(datasource == "nssp", !is.na(season),
-             !is.na(coalesce(hospitalizations_averted_vs_baseline,
-                             hospitalizations_averted_early_vs_baseline))) |>
-      transmute(
-        season = season,
-        hosp = coalesce(hospitalizations_averted_vs_baseline,
-                        hospitalizations_averted_early_vs_baseline),
-        window = window_label
+  if (is.null(values) || nrow(values) == 0) return(invisible(NULL))
+  values_df <- values |>
+    filter(datasource == "nssp", scenario_id == "uptake_100", !is.na(season),
+           !is.na(hospitalizations_averted_vs_baseline)) |>
+    transmute(
+      season,
+      hosp = hospitalizations_averted_vs_baseline,
+      window = recode(
+        comparison_window_name,
+        early_sep_mar = "September-March",
+        late_oct_apr = "October-April",
+        year_round = "Year-round"
       )
-  }
-  values_df <- bind_rows(lapply(names(window_dfs),
-                                function(w) prep(window_dfs[[w]], w)))
+    )
   if (is.null(values_df) || nrow(values_df) == 0) return(invisible(NULL))
 
-  win_levels <- names(window_dfs)[names(window_dfs) %in% unique(values_df$window)]
+  win_levels <- c("September-March", "October-April", "Year-round")
   values_df <- values_df |>
     mutate(season = factor(season, levels = sort(unique(season))),
            window = factor(window, levels = win_levels))
@@ -538,7 +471,7 @@ plot_infant_hospitalizations_averted <- function(window_dfs, figure_stub) {
 # Figure 5: national hospitalizations averted vs the October-March baseline for
 # three windows (September-March, October-April, year-round), by season, as
 # stacked panels A (primary model) and B (100% uptake). Combined with cowplot.
-plot_infant_hospitalizations_averted_ab <- function(primary_dfs, full_dfs) {
+plot_infant_hospitalizations_averted_ab <- function(summary_df) {
   if (!requireNamespace("cowplot", quietly = TRUE)) {
     message("Skipping figure 5: cowplot not installed.")
     return(invisible(NULL))
@@ -547,20 +480,21 @@ plot_infant_hospitalizations_averted_ab <- function(primary_dfs, full_dfs) {
                   "October-April"   = "#9aa0a6",
                   "Year-round"      = "#e08a3c")
 
-  averted_panel <- function(dfs, y_title) {
-    prep <- function(df, window_label) {
-      if (is.null(df) || nrow(df) == 0) return(NULL)
-      df |>
-        filter(datasource == "nssp", !is.na(season)) |>
-        transmute(
-          season = season,
-          hosp   = total_hospitalizations_averted_vs_baseline,
-          window = window_label
+  averted_panel <- function(scenario, y_title) {
+    d <- summary_df |>
+      filter(datasource == "nssp", scenario_id == scenario, !is.na(season)) |>
+      transmute(
+        season,
+        hosp = total_hospitalizations_averted_vs_baseline,
+        window = recode(
+          comparison_window_name,
+          early_sep_mar = "September-March",
+          late_oct_apr = "October-April",
+          year_round = "Year-round"
         )
-    }
-    d <- bind_rows(lapply(names(dfs), function(w) prep(dfs[[w]], w)))
+      )
     if (is.null(d) || nrow(d) == 0) return(NULL)
-    win_levels <- names(dfs)[names(dfs) %in% unique(d$window)]
+    win_levels <- c("September-March", "October-April", "Year-round")
     d <- d |>
       mutate(season = factor(season, levels = sort(unique(season))),
              window = factor(window, levels = win_levels))
@@ -578,8 +512,8 @@ plot_infant_hospitalizations_averted_ab <- function(primary_dfs, full_dfs) {
             panel.grid.major.x = element_blank())
   }
 
-  p_a <- averted_panel(primary_dfs, "National hospitalizations averted\n(primary model)")
-  p_b <- averted_panel(full_dfs, "National hospitalizations averted\n(100% uptake)")
+  p_a <- averted_panel("reference_12mo", "National hospitalizations averted\n(primary model)")
+  p_b <- averted_panel("uptake_100", "National hospitalizations averted\n(100% uptake)")
   if (is.null(p_a) || is.null(p_b)) return(invisible(NULL))
 
   # Legend on panel A (top-right), so it sits just above the plot rather than
@@ -648,8 +582,9 @@ nssp_outside   <- read_table("nssp_outside_fraction_by_state")
 nhsn_outside   <- read_table("nhsn_outside_fraction_by_state")
 nssp_processed <- read_processed("nssp")
 nhsn_processed <- read_processed("nhsn")
-nhsn_strata    <- maybe_table("nhsn_outside_fraction_all_strata")
-infant_stress  <- maybe_table("infant_ppx_stress_test_state_summary")
+infant_stress  <- maybe_table("infant_ppx_stress_test_window_summary")
+hosp_averted   <- maybe_table("infant_ppx_hospitalizations_averted")
+hosp_summary   <- maybe_table("infant_ppx_hospitalizations_averted_summary")
 
 # Start from a clean figure directory so no stale outputs remain.
 unlink(list.files(fig_dir, pattern = "\\.(png|pdf)$", full.names = TRUE))
@@ -658,34 +593,19 @@ unlink(list.files(fig_dir, pattern = "\\.(png|pdf)$", full.names = TRUE))
 plot_choropleth_grid(nssp_outside, nhsn_outside, nssp_frac_lbl, nhsn_frac_lbl)
 
 # Figure 2: ridgeline densities by season and age group
-plot_ridgeline_seasons_by_agegroup(nhsn_strata, nssp_outside)
+plot_ridgeline_nssp(nssp_outside)
 
 # Figure 3: window advantage (Sep-Mar, Oct-Apr, year-round) over Oct-March baseline
 plot_infant_ppx_window_advantage_forest(infant_stress)
 
 # Figure 4: per-state distribution of hospitalizations averted, three windows, 100% uptake
 plot_infant_hospitalizations_averted(
-  list(
-    "September-March" = maybe_table("infant_ppx_hospitalizations_averted_early_vs_baseline"),
-    "October-April"   = maybe_table("infant_ppx_hospitalizations_averted_late_vs_baseline"),
-    "Year-round"      = maybe_table("infant_ppx_hospitalizations_averted_year_round_vs_baseline")
-  ),
+  hosp_averted,
   "fig4_infant_ppx_hospitalizations_averted_by_window"
 )
 
 # Figure 5: national hospitalizations averted, three windows, primary vs 100% uptake (panels A/B)
-plot_infant_hospitalizations_averted_ab(
-  list(
-    "September-March" = maybe_table("infant_ppx_hospitalizations_averted_early_vs_baseline_primary_summary"),
-    "October-April"   = maybe_table("infant_ppx_hospitalizations_averted_late_vs_baseline_primary_summary"),
-    "Year-round"      = maybe_table("infant_ppx_hospitalizations_averted_year_round_vs_baseline_primary_summary")
-  ),
-  list(
-    "September-March" = maybe_table("infant_ppx_hospitalizations_averted_early_vs_baseline_summary"),
-    "October-April"   = maybe_table("infant_ppx_hospitalizations_averted_late_vs_baseline_summary"),
-    "Year-round"      = maybe_table("infant_ppx_hospitalizations_averted_year_round_vs_baseline_summary")
-  )
-)
+plot_infant_hospitalizations_averted_ab(hosp_summary)
 
 # Supplementary: state-level time series
 plot_timeseries(nssp_processed, nssp_ts_label, "nssp_",
@@ -694,21 +614,3 @@ plot_timeseries(nhsn_processed, nhsn_ts_label, "nhsn_",
                 default_or(config$nhsn_primary_outcome, "rsv_ped_0_4"), free_y = TRUE)
 
 message("Figures saved to ", fig_dir)
-
-# Copy the publication figures (PNG) into results/final_figures with manuscript
-# numbering. former_plots/ and other curated files are left untouched.
-final_dir <- file.path(root, "results", "final_figures")
-dir.create(final_dir, recursive = TRUE, showWarnings = FALSE)
-final_figures <- c(
-  "fig1_choropleth_grid"                                            = "fig1_choropleth_grid",
-  "fig2_ridgeline_nssp_seasons"                                     = "fig2_ridgeline_nssp_seasons",
-  "fig3_infant_ppx_early_start_advantage_forest"                    = "fig3_infant_ppx_early_start_advantage_forest",
-  "fig4_infant_ppx_hospitalizations_averted_by_window"      = "fig4_infant_ppx_hospitalizations_averted_by_window",
-  "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake" = "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake"
-)
-for (src in names(final_figures)) {
-  from <- file.path(fig_dir, paste0(src, ".png"))
-  to   <- file.path(final_dir, paste0(final_figures[[src]], ".png"))
-  if (file.exists(from)) file.copy(from, to, overwrite = TRUE)
-}
-message("Publication figures copied to ", final_dir)

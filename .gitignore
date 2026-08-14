@@ -1,5 +1,6 @@
-# Manuscript drafts and local Word artifacts
+# Manuscript drafts, reviewer material, and local backups
 manuscript/
+_backups*/
 ~$*.docx
 ~$*.doc
 
@@ -22,3 +23,10 @@ env/
 .Rhistory
 .RData
 .Rproj.user/
+
+# All downloaded data and generated analysis artifacts are local-only.
+data/
+results/
+
+# Local pipeline state
+pipeline.log

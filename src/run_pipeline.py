@@ -12,10 +12,11 @@ Components:
  8. Table output (CSV)
 
 Usage:
-    python -m src.run_pipeline [--force-refresh] [--use-cache] [--figures-only]
+    python -m src.run_pipeline [--offline] [--figures-only]
 """
 
 import logging
+import shutil
 import subprocess
 import sys
 from copy import deepcopy
@@ -57,57 +58,30 @@ def save_table(df: pd.DataFrame, name: str) -> Path:
     return filepath
 
 
-def remove_stale_data_driven_outputs() -> None:
-    """Remove generated trigger-window tables from older pipeline runs."""
-    stale_tables = [
-        "nssp_table_trigger_comparison",
-        "nssp_trigger_coverage_by_state",
-        "nhsn_table_trigger_comparison",
-        "nhsn_trigger_coverage_by_state",
-        "nhsn_trigger_coverage_rsvped04",
-        "nhsn_trigger_coverage_rsvpedtotal",
-        "nhsn_trigger_coverage_rsvtotal",
-        "nssp_infant_ppx_state_summary",
-        "nssp_infant_ppx_birth_month_summary",
-        "nhsn_infant_ppx_state_summary",
-        "nhsn_infant_ppx_birth_month_summary",
-        "nssp_infant_ppx_9mo_state_summary",
-        "nssp_infant_ppx_9mo_birth_month_summary",
-        "nhsn_infant_ppx_9mo_state_summary",
-        "nhsn_infant_ppx_9mo_birth_month_summary",
-        "nssp_infant_ppx_efficacy_state_summary",
-        "nssp_infant_ppx_efficacy_birth_month_summary",
-        "nhsn_infant_ppx_efficacy_state_summary",
-        "nhsn_infant_ppx_efficacy_birth_month_summary",
-        "nssp_infant_ppx_censor8mo_state_summary",
-        "nssp_infant_ppx_censor8mo_birth_month_summary",
-        "nhsn_infant_ppx_censor8mo_state_summary",
-        "nhsn_infant_ppx_censor8mo_birth_month_summary",
-    ]
-    for name in stale_tables:
-        path = RESULTS_TABLES / f"{name}.csv"
+def reset_generated_outputs() -> None:
+    """Start each full run with only the publication output contract."""
+    for path in (
+        DATA_PROCESSED,
+        PROJECT_ROOT / "results" / "tables",
+        PROJECT_ROOT / "results" / "figures",
+    ):
         if path.exists():
-            path.unlink()
-            logger.info(f"Removed stale data-driven table: {path}")
+            shutil.rmtree(path)
+    DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
+    RESULTS_TABLES.mkdir(parents=True, exist_ok=True)
 
 
 def run_r_figures() -> None:
     script_path = PROJECT_ROOT / "src" / "figures.R"
     if not script_path.exists():
-        logger.error(f"R figure script not found at {script_path}")
-        return
+        raise FileNotFoundError(f"R figure script not found at {script_path}")
 
     logger.info("Generating figures with R/ggplot2...")
-    try:
-        subprocess.run(
-            ["Rscript", str(script_path)],
-            check=True,
-            cwd=PROJECT_ROOT
-        )
-    except FileNotFoundError:
-        logger.error("Rscript not found. Install R and ensure Rscript is on PATH.")
-    except subprocess.CalledProcessError as exc:
-        logger.error(f"R figure script failed with exit code {exc.returncode}")
+    subprocess.run(
+        ["Rscript", str(script_path)],
+        check=True,
+        cwd=PROJECT_ROOT,
+    )
 
 
 def attach_metric_label(df: pd.DataFrame, metric_label: str) -> pd.DataFrame:
@@ -116,121 +90,36 @@ def attach_metric_label(df: pd.DataFrame, metric_label: str) -> pd.DataFrame:
     return labeled
 
 
-# ---------------------------------------------------------------------------
-# Table builders
-# ---------------------------------------------------------------------------
-
-def create_table1(
-    df_outside: pd.DataFrame,
-    df_national: pd.DataFrame,
-    df_regional: pd.DataFrame,
-    total_label: str = "Total Metric (sum over weeks)"
-) -> pd.DataFrame:
+def create_out_of_window_split(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
+    """Mean state share of seasonal activity before October and after March."""
+    weekly = df.dropna(subset=["season", "jurisdiction", value_col]).copy()
+    weekly["month"] = pd.to_datetime(weekly["week_end"]).dt.month
     rows = []
-    for _, row in df_national.iterrows():
-        rows.append({
-            "Group": "National (weighted)",
-            "Season": row["season"],
-            "N": row["n_states"],
-            "Median Outside Fraction": row["national_outside_fraction_weighted"],
-            "Q25": None,
-            "Q75": None,
-            total_label: row.get("total_national_burden", None)
-        })
-    for _, row in df_regional.iterrows():
-        rows.append({
-            "Group": f"HHS Region {int(row['hhs_region'])}",
-            "Season": row["season"],
-            "N": row["n_states"],
-            "Median Outside Fraction": row["median_outside_fraction"],
-            "Q25": row["q25_outside_fraction"],
-            "Q75": row["q75_outside_fraction"],
-            total_label: None
-        })
-    return pd.DataFrame(rows).sort_values(["Season", "Group"])
-
-def create_cross_source_comparison(
-    nssp_burden: dict,
-    nhsn_burden: dict,
-    season: str = "2024-2025",
-    nssp_metric_label: str = "RSV ED visit percentage of total ED visits, all ages",
-    nhsn_metric_label: str = "Pediatric RSV hospital admissions, ages 0-4"
-) -> pd.DataFrame:
-    rows = []
-
-    def build_row(source_label, metric_label, burden):
-        outside = burden["outside_fraction"]
-        national = burden["national_summary"]
-        season_outside = outside[outside["season"] == season]
-        season_national = national[national["season"] == season]
-
-        median_outside = season_outside["outside_fraction"].median() if len(season_outside) else None
-        unweighted = weighted = total_metric = None
-        if len(season_national) > 0:
-            r = season_national.iloc[0]
-            unweighted = r.get("national_outside_fraction_unweighted")
-            weighted = r.get("national_outside_fraction_weighted")
-            total_metric = r.get("total_national_burden")
-
-        rows.append({
-            "Data Source": source_label,
-            "Metric": metric_label,
-            "Season": season,
-            "N States": len(season_outside),
-            "Median Outside Fraction": median_outside,
-            "Unweighted Outside Fraction": unweighted,
-            "Weighted Outside Fraction": weighted,
-            "Total Metric (sum over weeks)": total_metric
-        })
-
-    build_row("NSSP", nssp_metric_label, nssp_burden)
-    build_row("NHSN", nhsn_metric_label, nhsn_burden)
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df = df.sort_values(["Data Source", "Season"])
-    return df
-
-
-def create_monthly_metric_comparison(
-    df_nssp: pd.DataFrame,
-    df_nhsn: pd.DataFrame,
-    nssp_value_col: str,
-    nhsn_value_col: str,
-    season: str = "2024-2025",
-    nssp_metric_label: str = "RSV ED visit percentage of total ED visits, all ages",
-    nhsn_metric_label: str = "Pediatric RSV hospital admissions, ages 0-4"
-) -> pd.DataFrame:
-    rows = []
-
-    def add_rows(df, value_col, source_label, metric_label):
-        season_df = df[df["season"] == season].copy()
-        if len(season_df) == 0:
-            return
-        season_df["month"] = season_df["week_end"].dt.to_period("M").astype(str)
-        monthly = season_df.groupby("month")[value_col].sum()
-        total = monthly.sum()
-        for month, val in monthly.items():
-            rows.append({
-                "Data Source": source_label,
-                "Metric": metric_label,
-                "Season": season,
-                "Month": month,
-                "Month Metric Total": val,
-                "Month Metric Fraction": val / total if total > 0 else None
+    for season, season_group in weekly.groupby("season"):
+        shares = []
+        for _, state_group in season_group.groupby("jurisdiction"):
+            total = state_group[value_col].sum()
+            if total <= 0:
+                continue
+            shares.append({
+                "early": state_group.loc[
+                    state_group["month"].isin([7, 8, 9]), value_col
+                ].sum() / total,
+                "late": state_group.loc[
+                    state_group["month"].isin([4, 5, 6]), value_col
+                ].sum() / total,
             })
-
-    add_rows(df_nssp, nssp_value_col, "NSSP", nssp_metric_label)
-    add_rows(df_nhsn, nhsn_value_col, "NHSN", nhsn_metric_label)
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df = df.sort_values(["Data Source", "Month"])
-    return df
+        rows.append({
+            "season": season,
+            "n_states": len(shares),
+            "mean_early_out_of_window_pct": 100 * np.mean([x["early"] for x in shares]),
+            "mean_late_out_of_window_pct": 100 * np.mean([x["late"] for x in shares]),
+        })
+    return pd.DataFrame(rows).sort_values("season")
 
 
 def create_infant_stress_window_summary(
     state_summary: pd.DataFrame,
-    bootstrap_replicates: int = 2000,
-    bootstrap_seed: int = 42,
 ) -> pd.DataFrame:
     if state_summary.empty:
         return pd.DataFrame()
@@ -301,7 +190,6 @@ def create_infant_stress_window_summary(
     summary = summary.merge(baseline, on=["datasource", "scenario_id"], how="left")
 
     delta_rows = []
-    rng = np.random.default_rng(bootstrap_seed)
     for (datasource, scenario_id), group in state_summary.groupby(["datasource", "scenario_id"]):
         unit_cols = ["season", "jurisdiction"]
         pivot = (
@@ -324,25 +212,15 @@ def create_infant_stress_window_summary(
                     "delta_vs_baseline_oct_mar": 0.0,
                     "q25_delta_vs_baseline_oct_mar": 0.0,
                     "q75_delta_vs_baseline_oct_mar": 0.0,
-                    "delta_ci_lower": 0.0,
-                    "delta_ci_upper": 0.0,
-                    "bootstrap_pr_delta_gt_zero": None,
                 })
                 continue
             valid = pivot[["baseline_oct_mar", window_name]].dropna()
             if valid.empty:
                 continue
-            sample_n = len(valid)
             observed_delta = (
                 valid[window_name].to_numpy(dtype=float)
                 - valid["baseline_oct_mar"].to_numpy(dtype=float)
             )
-            bootstrap_deltas = np.empty(bootstrap_replicates, dtype=float)
-            values = valid.to_numpy(dtype=float)
-            for i in range(bootstrap_replicates):
-                idx = rng.integers(0, sample_n, sample_n)
-                sample = values[idx, :]
-                bootstrap_deltas[i] = np.median(sample[:, 1] - sample[:, 0])
             delta_rows.append({
                 "datasource": datasource,
                 "scenario_id": scenario_id,
@@ -350,9 +228,6 @@ def create_infant_stress_window_summary(
                 "delta_vs_baseline_oct_mar": float(np.median(observed_delta)),
                 "q25_delta_vs_baseline_oct_mar": float(np.quantile(observed_delta, 0.25)),
                 "q75_delta_vs_baseline_oct_mar": float(np.quantile(observed_delta, 0.75)),
-                "delta_ci_lower": float(np.quantile(bootstrap_deltas, 0.025)),
-                "delta_ci_upper": float(np.quantile(bootstrap_deltas, 0.975)),
-                "bootstrap_pr_delta_gt_zero": float(np.mean(bootstrap_deltas > 0)),
             })
 
     if delta_rows:
@@ -411,8 +286,8 @@ def create_infant_hospitalizations_averted(
 
     The core protection model already encodes state-season timing and efficacy.
     This function joins a real state infant denominator and a published
-    untreated infant hospitalization risk to estimate the absolute gain from
-    moving the administration window earlier by one month.
+    untreated infant hospitalization risk to estimate an alternative window's
+    absolute gain relative to the October-March baseline.
     """
     translation_cfg = config.get("infant_hospitalization_translation", {})
     if not translation_cfg.get("enabled", False) or state_summary.empty:
@@ -496,12 +371,12 @@ def create_infant_hospitalizations_averted(
 
     translated = translated.rename(columns={
         baseline_window: "baseline_population_activity_weighted_protection",
-        comparison_window: "early_population_activity_weighted_protection",
+        comparison_window: "comparison_population_activity_weighted_protection",
         "source": "population_source",
         "source_url": "population_source_url",
     })
     translated["incremental_population_activity_weighted_protection"] = (
-        translated["early_population_activity_weighted_protection"]
+        translated["comparison_population_activity_weighted_protection"]
         - translated["baseline_population_activity_weighted_protection"]
     )
     translated["baseline_hospitalization_risk_per_infant_season"] = risk
@@ -512,14 +387,11 @@ def create_infant_hospitalizations_averted(
     translated["baseline_window_label"] = "Baseline Oct-Mar"
     translated["hospitalization_burden_source"] = translation_cfg.get("burden_source")
     translated["population_source_note"] = translation_cfg.get("population_source")
-    translated["hospitalizations_averted_early_vs_baseline"] = (
+    translated["hospitalizations_averted_vs_baseline"] = (
         translated["infant_population_under1"]
         * translated["baseline_hospitalization_risk_per_infant_season"]
         * translated["incremental_population_activity_weighted_protection"]
     )
-    translated["hospitalizations_averted_vs_baseline"] = translated[
-        "hospitalizations_averted_early_vs_baseline"
-    ]
     translated["hospitalizations_averted_per_100k_infants"] = (
         100000
         * translated["baseline_hospitalization_risk_per_infant_season"]
@@ -554,11 +426,7 @@ def create_infant_hospitalizations_averted(
         )
         .reset_index()
     )
-    summary["comparison"] = "Early Sep-Mar vs baseline Oct-Mar"
     summary["comparison"] = f"{comparison_window_label} vs baseline Oct-Mar"
-    summary["total_hospitalizations_averted_early_vs_baseline"] = summary[
-        "total_hospitalizations_averted_vs_baseline"
-    ]
     summary["comparison_window_name"] = comparison_window
     summary["comparison_window_label"] = comparison_window_label
     summary["scenario_id"] = scenario_id
@@ -624,28 +492,19 @@ def filter_nhsn_by_completeness(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1) -> dict:
-    """
-    Run the complete analysis pipeline.
-
-    Args:
-        force_refresh: If True, re-fetch data from Socrata even if cache exists
-        max_cache_age_days: Maximum raw-data cache age. If None, use the most
-            recent cached raw data regardless of age.
-
-    Returns:
-        Dictionary with all results
-    """
+def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
+    """Run the accepted-manuscript analysis using the configured data cutoff."""
     logger.info("RSV TIMING 2025-26 EXTENSION PIPELINE")
     logger.info(f"Started at: {datetime.now().isoformat()}")
 
-    from src.pull_nssp import load_cached_or_fetch as load_nssp, log_row_counts as log_nssp_rows
-    from src.pull_nhsn import load_cached_or_fetch as load_nhsn, log_row_counts as log_nhsn_rows
+    from src.data_contract import load_cdc, load_census
+    from src.pull_nssp import log_row_counts as log_nssp_rows
+    from src.pull_nhsn import log_row_counts as log_nhsn_rows
     from src.build_seasons import build_seasons, save_processed
     from src.analysis_burden import run_burden_analysis
-    from src.analysis_infant_ppx import realistic_prior_table, run_infant_ppx_analysis
+    from src.analysis_infant_ppx import run_infant_ppx_analysis
     config = load_config()
-    remove_stale_data_driven_outputs()
+    reset_generated_outputs()
     labels_cfg = config.get("labels", {})
     nssp_metric_label = labels_cfg.get(
         "nssp_metric", "RSV ED visit percentage of total ED visits, all ages"
@@ -659,19 +518,16 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
 
     logger.info(f"Seasons: {[s['name'] for s in config['seasons']]}")
     logger.info(f"Primary outcome: {config['primary_outcome']}")
-    if max_cache_age_days is None and not force_refresh:
-        logger.info("Raw-data cache age check disabled; using latest cached raw files.")
-
     # ------------------------------------------------------------------
     # NSSP
     # ------------------------------------------------------------------
     logger.info("\nStep 1: Extracting NSSP data...")
-    df_nssp_raw = load_nssp(max_age_days=max_cache_age_days, force_refresh=force_refresh)
+    df_nssp_raw = load_cdc("nssp", offline=offline, refresh=refresh_data)
     log_nssp_rows(df_nssp_raw)
 
     logger.info("\nStep 2: Building NSSP seasons...")
     df_nssp = build_seasons(df_nssp_raw)
-    save_processed(df_nssp, filename="nssp_processed.parquet", also_csv=True)
+    save_processed(df_nssp, filename="nssp_processed.csv")
 
     logger.info("\nStep 3: NSSP burden analysis...")
     nssp_value_col = config.get("primary_outcome", "rsv_pct")
@@ -682,30 +538,18 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
     )
 
     logger.info("\nStep 4: Saving NSSP tables...")
-    table1_nssp = create_table1(
-        nssp_burden["outside_fraction"],
-        nssp_burden["national_summary"],
-        nssp_burden["regional_summary"],
-        total_label=f"Total {nssp_metric_label} (sum of weekly values)"
-    )
-    save_table(table1_nssp, "nssp_table1_outside_fraction_summary")
-    save_table(nssp_burden["regional_summary"], "nssp_regional_summary")
     save_table(
         attach_metric_label(nssp_burden["outside_fraction"], nssp_metric_label),
         "nssp_outside_fraction_by_state"
     )
     save_table(
-        attach_metric_label(nssp_burden["material_activity"], nssp_metric_label),
-        "nssp_material_activity_by_state"
-    )
-    save_table(
         attach_metric_label(nssp_burden["extended_windows"], nssp_metric_label),
         "nssp_extended_windows_evaluation"
     )
-    if nssp_burden["bootstrap_ci"] is not None:
-        save_table(nssp_burden["bootstrap_ci"], "nssp_bootstrap_ci_summary")
-    if nssp_burden["longitudinal"] is not None:
-        save_table(nssp_burden["longitudinal"], "nssp_longitudinal_consistency")
+    save_table(
+        create_out_of_window_split(df_nssp, nssp_value_col),
+        "nssp_out_of_window_early_late_split",
+    )
 
     log_summary_stats(nssp_burden["outside_fraction"], "NSSP")
 
@@ -713,13 +557,13 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
     # NHSN - primary age stratum (rsv_ped_0_4)
     # ------------------------------------------------------------------
     logger.info("\nStep 5: Extracting NHSN data...")
-    df_nhsn_raw = load_nhsn(max_age_days=max_cache_age_days, force_refresh=force_refresh)
+    df_nhsn_raw = load_cdc("nhsn", offline=offline, refresh=refresh_data)
     log_nhsn_rows(df_nhsn_raw)
 
     logger.info("\nStep 6: Building NHSN seasons (with completeness check)...")
     df_nhsn_all = build_seasons(df_nhsn_raw)
     df_nhsn_all = filter_nhsn_by_completeness(df_nhsn_all, config)
-    save_processed(df_nhsn_all, filename="nhsn_processed.parquet", also_csv=True)
+    save_processed(df_nhsn_all, filename="nhsn_processed.csv")
 
     nhsn_primary_col = config.get("nhsn_primary_outcome", "rsv_ped_0_4")
 
@@ -731,30 +575,14 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
     )
 
     logger.info("\nStep 8: Saving NHSN primary tables...")
-    table1_nhsn = create_table1(
-        nhsn_burden["outside_fraction"],
-        nhsn_burden["national_summary"],
-        nhsn_burden["regional_summary"],
-        total_label="Total pediatric RSV admissions, ages 0-4"
-    )
-    save_table(table1_nhsn, "nhsn_table1_outside_fraction_summary")
-    save_table(nhsn_burden["regional_summary"], "nhsn_regional_summary")
     save_table(
         attach_metric_label(nhsn_burden["outside_fraction"], nhsn_metric_label),
         "nhsn_outside_fraction_by_state"
     )
     save_table(
-        attach_metric_label(nhsn_burden["material_activity"], nhsn_metric_label),
-        "nhsn_material_activity_by_state"
-    )
-    save_table(
         attach_metric_label(nhsn_burden["extended_windows"], nhsn_metric_label),
         "nhsn_extended_windows_evaluation"
     )
-    if nhsn_burden["bootstrap_ci"] is not None:
-        save_table(nhsn_burden["bootstrap_ci"], "nhsn_bootstrap_ci_summary")
-    if nhsn_burden["longitudinal"] is not None:
-        save_table(nhsn_burden["longitudinal"], "nhsn_longitudinal_consistency")
 
     log_summary_stats(nhsn_burden["outside_fraction"], "NHSN (ages 0-4)")
 
@@ -764,7 +592,6 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
     logger.info("\nStep 9: NHSN burden analysis by age stratum...")
 
     all_strata_outside = []   # for ridgeline plot input
-    all_strata_bootstrap = []
 
     for stratum in nhsn_age_strata:
         col = stratum["col"]
@@ -784,84 +611,40 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
         outside_tagged["metric_label"] = label
         all_strata_outside.append(outside_tagged)
 
-        if strat_burden["bootstrap_ci"] is not None:
-            all_strata_bootstrap.append(strat_burden["bootstrap_ci"])
-
-        safe_col = col.replace("_", "")
-        save_table(
-            attach_metric_label(strat_burden["outside_fraction"], label),
-            f"nhsn_outside_fraction_by_state_{safe_col}"
-        )
-        save_table(
-            attach_metric_label(strat_burden["extended_windows"], label),
-            f"nhsn_extended_windows_{safe_col}"
-        )
-
     # Combined age-strata outside fraction table (for ridgeline figures)
     if all_strata_outside:
         combined_strata = pd.concat(all_strata_outside, ignore_index=True)
         save_table(combined_strata, "nhsn_outside_fraction_all_strata")
 
-    # Combined bootstrap CI table
-    if all_strata_bootstrap:
-        combined_bootstrap = pd.concat(
-            [nhsn_burden["bootstrap_ci"]] + all_strata_bootstrap,
-            ignore_index=True
-        )
-        save_table(combined_bootstrap, "nhsn_bootstrap_ci_all_strata")
+    load_census(offline=offline, refresh=refresh_data)
 
     # ------------------------------------------------------------------
-    # Cross-source comparison tables
+    # Infant prophylaxis model
     # ------------------------------------------------------------------
     logger.info("\nStep 10: Infant prophylaxis protection model...")
-    infant_parameters = []
     if config.get("infant_ppx_model", {}).get("enabled", True):
-        save_table(realistic_prior_table(), "infant_ppx_realistic_priors")
-
-        def run_and_save_infant_model(model_config: dict, suffix: str = "") -> list[pd.DataFrame]:
-            name_suffix = f"_{suffix}" if suffix else ""
+        def run_model_pair(model_config: dict) -> list[pd.DataFrame]:
             nssp_infant = run_infant_ppx_analysis(
                 df_nssp,
                 value_col=nssp_value_col,
                 datasource="nssp",
                 metric_label=nssp_metric_label,
                 config=model_config,
+                include_birth_month_summary=False,
             )
-            save_table(nssp_infant["state_summary"], f"nssp_infant_ppx{name_suffix}_state_summary")
-            save_table(nssp_infant["birth_month_summary"], f"nssp_infant_ppx{name_suffix}_birth_month_summary")
-            infant_parameters.append(nssp_infant["parameters"])
-
             nhsn_infant = run_infant_ppx_analysis(
                 df_nhsn_all,
                 value_col=nhsn_primary_col,
                 datasource="nhsn",
                 metric_label=nhsn_metric_label,
                 config=model_config,
+                include_birth_month_summary=False,
             )
-            save_table(nhsn_infant["state_summary"], f"nhsn_infant_ppx{name_suffix}_state_summary")
-            save_table(nhsn_infant["birth_month_summary"], f"nhsn_infant_ppx{name_suffix}_birth_month_summary")
-            infant_parameters.append(nhsn_infant["parameters"])
             return [nssp_infant["state_summary"], nhsn_infant["state_summary"]]
 
-        realistic_priors = config.get("infant_ppx_realistic_priors", {})
-
-        def realistic_delivery_config(exposure_censor_age_months: int, label: str) -> dict:
+        def primary_config(exposure_censor_age_months: int, label: str) -> dict:
             scenario_config = deepcopy(config)
             infant_cfg = scenario_config["infant_ppx_model"]
-            infant_cfg["uptake"] = float(
-                realistic_priors.get("nirsevimab_uptake_2023_24", infant_cfg.get("uptake", 1.0))
-            )
-            infant_cfg["efficacy_profile"] = "piecewise_linear"
-            infant_cfg["protection_duration_days"] = 210
-            infant_cfg["newborn_first_week_dose_probability"] = float(
-                realistic_priors.get("newborn_first_week_nirsevimab_receipt", 0.0)
-            )
-            infant_cfg["routine_visit_on_time_probability"] = float(
-                realistic_priors.get("routine_visit_completion_first_15_months", 1.0)
-            )
-            infant_cfg["routine_visit_delay_days"] = int(
-                round(realistic_priors.get("routine_visit_delay_days", 0))
-            )
             infant_cfg["exposure_censor_age_months"] = exposure_censor_age_months
             infant_cfg["scenario_label"] = label
             return scenario_config
@@ -879,34 +662,60 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
 
         stress_state_parts = []
 
-        config_realistic12mo = realistic_delivery_config(
-            12, "Realistic delivery priors, 12-month exposure censor"
-        )
-        logger.info("  Figure 3 model: realistic delivery priors, 12-month censor")
-        realistic12mo_parts = run_and_save_infant_model(config_realistic12mo, suffix="realistic12mo")
+        config_primary = primary_config(12, "Primary model")
+        logger.info("  Primary model, 12-month exposure censor")
+        primary_parts = run_model_pair(config_primary)
         stress_state_parts.extend(tag_stress_state(
-            realistic12mo_parts,
+            primary_parts,
             scenario_id="reference_12mo",
             scenario_family="Reference",
-            scenario_label="Reference: 18.5% uptake; 38.1% first-week dosing; 14-day visit delay; Moline et al. 210-day efficacy; 12-month exposure censor",
+            scenario_label="Primary model",
             scenario_order=1,
         ))
 
-        config_realistic8mo = realistic_delivery_config(
-            8, "Realistic delivery priors, 8-month exposure censor"
-        )
-        logger.info("  Figure 4 model: realistic delivery priors, 8-month censor")
-        realistic8mo_parts = run_and_save_infant_model(config_realistic8mo, suffix="realistic8mo")
+        # Uptake is a direct multiplier in the deterministic model. Derive these
+        # sensitivities exactly from the primary state summaries instead of
+        # rerunning every birth cohort three times.
+        uptake_scaled_columns = [
+            "share_receiving_ppx",
+            "median_person_activity_fractional_protection",
+            "q25_person_activity_fractional_protection",
+            "q75_person_activity_fractional_protection",
+            "mean_person_activity_fractional_protection",
+            "population_activity_weighted_protection",
+            "median_person_calendar_fractional_protection",
+            "mean_person_calendar_fractional_protection",
+        ]
+        primary_uptake = float(config["infant_ppx_model"]["uptake"])
+        for uptake, order in ((0.50, 10), (0.75, 11), (1.00, 12)):
+            scaled_parts = []
+            for part in primary_parts:
+                scaled = part.copy()
+                for column in uptake_scaled_columns:
+                    scaled[column] = scaled[column] * uptake / primary_uptake
+                scaled["uptake"] = uptake
+                scaled_parts.append(scaled)
+            stress_state_parts.extend(tag_stress_state(
+                scaled_parts,
+                scenario_id=f"uptake_{int(uptake * 100)}",
+                scenario_family="Uptake",
+                scenario_label=f"Uptake {int(uptake * 100)}%; otherwise primary",
+                scenario_order=order,
+            ))
+
+        config_8mo = primary_config(8, "8-month exposure censor; otherwise primary")
+        logger.info("  Sensitivity model, 8-month exposure censor")
+        censor_8mo_parts = run_model_pair(config_8mo)
         stress_state_parts.extend(tag_stress_state(
-            realistic8mo_parts,
+            censor_8mo_parts,
             scenario_id="censor_8mo",
             scenario_family="Censoring",
-            scenario_label="8-month exposure censor; otherwise reference",
+            scenario_label="8-month exposure censor; otherwise primary",
             scenario_order=2,
         ))
 
         def run_stress_scenario(scenario_id: str, family: str, label: str, order: int, edits: dict) -> None:
-            scenario_config = realistic_delivery_config(12, label)
+            scenario_config = primary_config(12, label)
             infant_cfg = scenario_config["infant_ppx_model"]
             infant_cfg.update(edits)
             logger.info("  Stress test: %s", label)
@@ -936,29 +745,26 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
             ))
 
         stress_specs = [
-            ("uptake_50", "Uptake", "Uptake 50%; otherwise reference", 10, {"uptake": 0.50}),
-            ("uptake_75", "Uptake", "Uptake 75%; otherwise reference", 11, {"uptake": 0.75}),
-            ("uptake_100", "Uptake", "Uptake 100%; otherwise reference", 12, {"uptake": 1.00}),
             (
                 "newborn_first_week_20",
                 "Newborn dosing",
-                "First-week dosing 20%; otherwise reference",
+                "First-week dosing 20%; otherwise primary",
                 20,
                 {"newborn_first_week_dose_probability": 0.20},
             ),
             (
                 "newborn_first_week_60",
                 "Newborn dosing",
-                "First-week dosing 60%; otherwise reference",
+                "First-week dosing 60%; otherwise primary",
                 21,
                 {"newborn_first_week_dose_probability": 0.60},
             ),
-            ("visit_delay_0", "Visit delay", "No routine-visit delay; otherwise reference", 30, {"routine_visit_delay_days": 0}),
-            ("visit_delay_30", "Visit delay", "30-day routine-visit delay; otherwise reference", 31, {"routine_visit_delay_days": 30}),
+            ("visit_delay_0", "Visit delay", "No routine-visit delay; otherwise primary", 30, {"routine_visit_delay_days": 0}),
+            ("visit_delay_30", "Visit delay", "30-day routine-visit delay; otherwise primary", 31, {"routine_visit_delay_days": 30}),
             (
                 "waning_rapid",
                 "Waning",
-                "Rapid waning: 130-210 day effectiveness at the lower 95% CI (42%); otherwise reference",
+                "Rapid waning: 130-210 day effectiveness at the lower 95% CI (42%); otherwise primary",
                 40,
                 {"efficacy_curve_points": [
                     {"day": 0.0, "efficacy": 0.0},
@@ -975,109 +781,38 @@ def run_pipeline(force_refresh: bool = False, max_cache_age_days: int | None = 1
             stress_state = pd.concat(stress_state_parts, ignore_index=True)
             stress_window_summary = create_infant_stress_window_summary(stress_state)
             stress_ranking = create_infant_stress_ranking(stress_window_summary)
-            hosp_parts = []
-            hosp_summary_parts = []
-            comparison_outputs = {
-                "early_sep_mar": "early",
-                "late_oct_apr": "late",
-                "year_round": "year_round",
-            }
-            for comparison_window, slug in comparison_outputs.items():
-                comparison_config = deepcopy(config)
-                comparison_config.setdefault("infant_hospitalization_translation", {})
-                comparison_config["infant_hospitalization_translation"][
-                    "comparison_window"
-                ] = comparison_window
-                hosp_averted, hosp_averted_summary = create_infant_hospitalizations_averted(
-                    stress_state,
-                    comparison_config,
-                )
-                if not hosp_averted.empty:
-                    save_table(
-                        hosp_averted,
-                        f"infant_ppx_hospitalizations_averted_{slug}_vs_baseline",
+            hospitalization_rows = []
+            hospitalization_summaries = []
+            for scenario_id in ("reference_12mo", "uptake_100"):
+                for comparison_window in ("early_sep_mar", "late_oct_apr", "year_round"):
+                    translation_config = deepcopy(config)
+                    translation = translation_config.setdefault(
+                        "infant_hospitalization_translation", {}
                     )
-                    hosp_parts.append(hosp_averted)
-                if not hosp_averted_summary.empty:
-                    save_table(
-                        hosp_averted_summary,
-                        f"infant_ppx_hospitalizations_averted_{slug}_vs_baseline_summary",
+                    translation["scenario_id"] = scenario_id
+                    translation["comparison_window"] = comparison_window
+                    rows, summary = create_infant_hospitalizations_averted(
+                        stress_state, translation_config
                     )
-                    hosp_summary_parts.append(hosp_averted_summary)
+                    if not rows.empty:
+                        hospitalization_rows.append(rows)
+                    if not summary.empty:
+                        hospitalization_summaries.append(summary)
 
-            # Primary-model (reference scenario, realistic uptake) averted for the
-            # A/B hospitalizations-averted figure. Mirrors the 100% uptake outputs
-            # above but uses scenario_id=reference_12mo so the figure can contrast
-            # realistic-uptake impact (panel A) with the 100% uptake idealization
-            # (panel B).
-            for primary_window, primary_slug in {
-                "early_sep_mar": "early",
-                "late_oct_apr": "late",
-                "year_round": "year_round",
-            }.items():
-                primary_config = deepcopy(config)
-                primary_tcfg = primary_config.setdefault(
-                    "infant_hospitalization_translation", {}
-                )
-                primary_tcfg["comparison_window"] = primary_window
-                primary_tcfg["scenario_id"] = "reference_12mo"
-                primary_averted, primary_averted_summary = create_infant_hospitalizations_averted(
-                    stress_state,
-                    primary_config,
-                )
-                if not primary_averted.empty:
-                    save_table(
-                        primary_averted,
-                        f"infant_ppx_hospitalizations_averted_{primary_slug}_vs_baseline_primary",
-                    )
-                if not primary_averted_summary.empty:
-                    save_table(
-                        primary_averted_summary,
-                        f"infant_ppx_hospitalizations_averted_{primary_slug}_vs_baseline_primary_summary",
-                    )
-
-            save_table(stress_state, "infant_ppx_stress_test_state_summary")
             save_table(stress_window_summary, "infant_ppx_stress_test_window_summary")
             save_table(stress_ranking, "infant_ppx_stress_test_ranking")
-            if hosp_parts:
+            if hospitalization_rows:
                 save_table(
-                    pd.concat(hosp_parts, ignore_index=True),
-                    "infant_ppx_hospitalizations_averted_vs_baseline",
+                    pd.concat(hospitalization_rows, ignore_index=True),
+                    "infant_ppx_hospitalizations_averted",
                 )
-            if hosp_summary_parts:
+            if hospitalization_summaries:
                 save_table(
-                    pd.concat(hosp_summary_parts, ignore_index=True),
-                    "infant_ppx_hospitalizations_averted_vs_baseline_summary",
+                    pd.concat(hospitalization_summaries, ignore_index=True),
+                    "infant_ppx_hospitalizations_averted_summary",
                 )
-
-        if infant_parameters:
-            save_table(
-                pd.concat(infant_parameters, ignore_index=True),
-                "infant_ppx_model_parameters"
-            )
     else:
         logger.info("Infant prophylaxis protection model disabled in config.")
-
-    # ------------------------------------------------------------------
-    # Cross-source comparison tables
-    # ------------------------------------------------------------------
-    logger.info("\nStep 11: Cross-source comparison tables...")
-    for season_name in ["2024-2025", "2025-2026"]:
-        cross = create_cross_source_comparison(
-            nssp_burden, nhsn_burden, season=season_name,
-            nssp_metric_label=nssp_metric_label,
-            nhsn_metric_label=nhsn_metric_label
-        )
-        safe = season_name.replace("-", "_")
-        save_table(cross, f"comparison_outside_fraction_{safe}")
-
-        monthly = create_monthly_metric_comparison(
-            df_nssp, df_nhsn_all,
-            nssp_value_col, nhsn_primary_col, season=season_name,
-            nssp_metric_label=nssp_metric_label,
-            nhsn_metric_label=nhsn_metric_label
-        )
-        save_table(monthly, f"comparison_monthly_metric_{safe}")
 
     # Combined bootstrap CI summary (NSSP + NHSN primary)
     bootstrap_parts = []
@@ -1133,12 +868,10 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="RSV Timing 2025-26 Extension Pipeline")
-    parser.add_argument("--force-refresh", action="store_true",
-                        help="Force re-fetch data from Socrata even if cache exists")
-    parser.add_argument("--use-cache", action="store_true",
-                        help="Use the latest cached raw data regardless of file age")
-    parser.add_argument("--max-cache-age-days", type=int, default=1,
-                        help="Maximum raw-data cache age before fetching fresh data (default: 1)")
+    parser.add_argument("--offline", action="store_true",
+                        help="Use only the explicit fixed-cutoff local cache")
+    parser.add_argument("--refresh-data", action="store_true",
+                        help="Re-fetch public inputs through the configured cutoff")
     parser.add_argument("--figures-only", action="store_true",
                         help="Only regenerate figures using existing processed data")
     args = parser.parse_args()
@@ -1146,11 +879,7 @@ def main():
     if args.figures_only:
         generate_figures_only()
     else:
-        max_cache_age_days = None if args.use_cache else args.max_cache_age_days
-        run_pipeline(
-            force_refresh=args.force_refresh,
-            max_cache_age_days=max_cache_age_days
-        )
+        run_pipeline(offline=args.offline, refresh_data=args.refresh_data)
 
 
 if __name__ == "__main__":

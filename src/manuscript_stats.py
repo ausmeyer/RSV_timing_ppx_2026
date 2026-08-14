@@ -31,17 +31,10 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     bootstrap_ci  = _read("bootstrap_ci_summary")
     longitudinal  = _read("longitudinal_consistency")
     nhsn_strata   = _read("nhsn_outside_fraction_all_strata")
-    nssp_infant_realistic12mo = _read("nssp_infant_ppx_realistic12mo_state_summary")
-    nhsn_infant_realistic12mo = _read("nhsn_infant_ppx_realistic12mo_state_summary")
-    nssp_infant_realistic8mo = _read("nssp_infant_ppx_realistic8mo_state_summary")
-    nhsn_infant_realistic8mo = _read("nhsn_infant_ppx_realistic8mo_state_summary")
+    nssp_split = _read("nssp_out_of_window_early_late_split")
+    infant_stress_window = _read("infant_ppx_stress_test_window_summary")
     infant_stress_ranking = _read("infant_ppx_stress_test_ranking")
-    infant_hosp_averted_summary = _read(
-        "infant_ppx_hospitalizations_averted_early_vs_baseline_summary"
-    )
-    infant_hosp_averted_all_summary = _read(
-        "infant_ppx_hospitalizations_averted_vs_baseline_summary"
-    )
+    infant_hosp_averted_summary = _read("infant_ppx_hospitalizations_averted_summary")
 
     lines = []
 
@@ -135,50 +128,17 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     add("PARAGRAPH 1b - Out-of-Window Early vs Late Split, NSSP (Figure 1 legend)")
     add("-" * 80)
     add()
-    processed_nssp = root / "data" / "processed" / "nssp_processed.csv"
-    exclude_juris = (
-        {"USA", "National"}
-        | {f"Region {i}" for i in range(1, 11)}
-        | {"AS", "GU", "MP", "PR", "VI", "Guam", "Puerto Rico", "Virgin Islands"}
-    )
-    if processed_nssp.exists():
-        nssp_wk = pd.read_csv(processed_nssp, parse_dates=["week_end"])
-        nssp_wk = nssp_wk[~nssp_wk["jurisdiction"].isin(exclude_juris)].copy()
-        nssp_wk["month"] = nssp_wk["week_end"].dt.month
-        split_rows = []
-        for season in sorted(nssp_wk["season"].unique()):
-            g = nssp_wk[nssp_wk["season"] == season]
-            early_shares, late_shares = [], []
-            for _, gs in g.groupby("jurisdiction"):
-                total = gs["rsv_pct"].sum()
-                if total <= 0:
-                    continue
-                early = gs.loc[gs["month"].isin([7, 8, 9]), "rsv_pct"].sum() / total
-                late = gs.loc[gs["month"].isin([4, 5, 6]), "rsv_pct"].sum() / total
-                early_shares.append(early)
-                late_shares.append(late)
-            mean_early = float(np.mean(early_shares)) * 100 if early_shares else np.nan
-            mean_late = float(np.mean(late_shares)) * 100 if late_shares else np.nan
-            n_states = len(early_shares)
-            split_rows.append(
-                {
-                    "season": season,
-                    "n_states": n_states,
-                    "mean_early_out_of_window_pct": mean_early,
-                    "mean_late_out_of_window_pct": mean_late,
-                }
-            )
+    if not nssp_split.empty:
+        for _, row in nssp_split.sort_values("season").iterrows():
             add(
-                f"  NSSP {season}: mean early-season (Jul-Sep) = {mean_early:.1f}% "
+                f"  NSSP {row['season']}: mean early-season (Jul-Sep) = "
+                f"{row['mean_early_out_of_window_pct']:.1f}% "
                 f"of total seasonal RSV activity; mean late-season (Apr-Jun) = "
-                f"{mean_late:.1f}% (N = {n_states} jurisdictions)"
+                f"{row['mean_late_out_of_window_pct']:.1f}% "
+                f"(N = {int(row['n_states'])} jurisdictions)"
             )
-        # persist a reproducible table for the Figure 1 legend
-        pd.DataFrame(split_rows).to_csv(
-            tables / "nssp_out_of_window_early_late_split.csv", index=False
-        )
     else:
-        add("  [processed NSSP data not available; run the pipeline first]")
+        add("  [early/late split table not available; run the pipeline first]")
 
     add()
 
@@ -322,7 +282,11 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     add("-" * 80)
     add()
 
-    def summarize_infant_ppx(df, label):
+    def summarize_infant_ppx(datasource, scenario_id, label):
+        df = infant_stress_window[
+            (infant_stress_window.get("datasource") == datasource)
+            & (infant_stress_window.get("scenario_id") == scenario_id)
+        ] if not infant_stress_window.empty else pd.DataFrame()
         if df.empty:
             add(f"  {label}: [infant PPX model table not available]")
             return
@@ -332,33 +296,24 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             data = df[df["window_name"] == wk]
             if len(data) == 0:
                 continue
-            metric_col = (
-                "population_activity_weighted_protection"
-                if "population_activity_weighted_protection" in data.columns
-                else "median_person_activity_fractional_protection"
-            )
-            metric_label = (
-                "activity-weighted protection"
-                if metric_col == "population_activity_weighted_protection"
-                else "person-level protection"
-            )
-            median_protection = data[metric_col].median() * 100
-            q25 = data[metric_col].quantile(0.25) * 100
-            q75 = data[metric_col].quantile(0.75) * 100
-            dose_opp = data["share_receiving_ppx"].median() * 100
+            row = data.iloc[0]
+            median_protection = row["median_population_activity_weighted_protection"] * 100
+            q25 = row["q25_population_activity_weighted_protection"] * 100
+            q75 = row["q75_population_activity_weighted_protection"] * 100
+            dose_opp = row["median_share_receiving_ppx"] * 100
             add(
-                f"    - {wlabel}: median {metric_label}={median_protection:.1f}% "
+                f"    - {wlabel}: median activity-weighted protection={median_protection:.1f}% "
                 f"(state IQR {q25:.1f}-{q75:.1f}%); "
                 f"dose opportunity={dose_opp:.1f}%"
             )
         add()
 
     summarize_infant_ppx(
-        nssp_infant_realistic12mo,
+        "nssp", "reference_12mo",
         "NSSP curve-weighted model, realistic delivery priors, 12-month censor",
     )
     summarize_infant_ppx(
-        nhsn_infant_realistic12mo,
+        "nhsn", "reference_12mo",
         "NHSN ages 0-4 curve-weighted model, realistic delivery priors, 12-month censor",
     )
 
@@ -366,11 +321,11 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     add("-" * 80)
     add()
     summarize_infant_ppx(
-        nssp_infant_realistic8mo,
+        "nssp", "censor_8mo",
         "NSSP curve-weighted model, realistic delivery priors, 8-month censor",
     )
     summarize_infant_ppx(
-        nhsn_infant_realistic8mo,
+        "nhsn", "censor_8mo",
         "NHSN ages 0-4 curve-weighted model, realistic delivery priors, 8-month censor",
     )
 
@@ -408,16 +363,8 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     add("PARAGRAPH 8 - Hospitalization Translation (100% uptake scenario)")
     add("-" * 80)
     add()
-    hosp_summary = (
-        infant_hosp_averted_all_summary
-        if not infant_hosp_averted_all_summary.empty
-        else infant_hosp_averted_summary
-    )
-    total_col = (
-        "total_hospitalizations_averted_vs_baseline"
-        if "total_hospitalizations_averted_vs_baseline" in hosp_summary.columns
-        else "total_hospitalizations_averted_early_vs_baseline"
-    )
+    hosp_summary = infant_hosp_averted_summary
+    total_col = "total_hospitalizations_averted_vs_baseline"
     if hosp_summary.empty:
         add("  [hospitalization translation table not available]")
         add()
@@ -427,7 +374,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             "late_oct_apr": 2,
             "year_round": 3,
         }
-        hosp_summary = hosp_summary.copy()
+        hosp_summary = hosp_summary[hosp_summary["scenario_id"] == "uptake_100"].copy()
         hosp_summary["_comparison_order"] = (
             hosp_summary["comparison_window_name"].map(comparison_order).fillna(99)
         )
@@ -435,7 +382,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             add(
                 f"  {row['season']}: {row['comparison']} averted an estimated "
                 f"{row[total_col]:.0f} RSV hospitalizations "
-                f"nationally under the 100% uptake, otherwise-reference scenario "
+                f"nationally under the 100% uptake, otherwise-primary scenario "
                 f"(median state={row['median_state_hospitalizations_averted']:.1f}; "
                 f"IQR={row['q25_state_hospitalizations_averted']:.1f}-"
                 f"{row['q75_state_hospitalizations_averted']:.1f})."

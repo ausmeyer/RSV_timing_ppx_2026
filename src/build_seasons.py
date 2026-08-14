@@ -310,11 +310,11 @@ def add_state_flags(
 
 def save_processed(
     df: pd.DataFrame,
-    filename: str = "nssp_processed.parquet",
+    filename: str = "nssp_processed.csv",
     also_csv: bool = False
 ) -> Path:
     """
-    Save processed DataFrame to parquet.
+    Save a processed DataFrame as CSV or parquet.
 
     Args:
         df: Processed DataFrame
@@ -327,13 +327,18 @@ def save_processed(
     DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
 
     filepath = DATA_PROCESSED / filename
-    df.to_parquet(filepath, index=False)
+    if filepath.suffix == ".csv":
+        df.to_csv(filepath, index=False)
+    elif filepath.suffix == ".parquet":
+        df.to_parquet(filepath, index=False)
+    else:
+        raise ValueError(f"Unsupported processed-data format: {filepath.suffix}")
 
     logger.info(f"Saved processed data to {filepath}")
     logger.info(f"  Shape: {df.shape}")
     logger.info(f"  Columns: {list(df.columns)}")
 
-    if also_csv:
+    if also_csv and filepath.suffix != ".csv":
         csv_path = filepath.with_suffix(".csv")
         df.to_csv(csv_path, index=False)
         logger.info(f"Saved processed CSV to {csv_path}")
