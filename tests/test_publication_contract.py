@@ -21,11 +21,17 @@ class PublicationContractTests(unittest.TestCase):
         self.assertEqual(model["newborn_first_week_dose_probability"], 0.381)
         self.assertEqual(model["routine_visit_on_time_probability"], 0.59)
         self.assertEqual(model["routine_visit_delay_days"], 14)
+        self.assertEqual(
+            model["receipt_history_mode"],
+            "seasonal_coverage_first_visit",
+        )
+        self.assertEqual(model["program_start_season_year"], 2023)
+        self.assertFalse(model["catchup_if_no_routine_visit"])
 
     def test_parameter_provenance_matches_table_2(self):
         config = yaml.safe_load((ROOT / "config.yaml").read_text())
         table = create_primary_parameter_table(config)
-        self.assertEqual(len(table), 13)
+        self.assertEqual(len(table), 14)
         self.assertEqual(
             list(table.columns),
             ["parameter", "value", "source", "rationale", "source_detail"],
@@ -33,6 +39,8 @@ class PublicationContractTests(unittest.TestCase):
         values = table.set_index("parameter")["value"].to_dict()
         self.assertIn("18.5%", values["Uptake"])
         self.assertIn("Age <8 months", values["Eligibility"])
+        self.assertEqual(values["Receipt history"], "Prior recipients not redosed")
+        self.assertIn("18.5% (primary)", values["Uptake"])
         self.assertIn("38.1%", values["Newborn/first-week dosing pathway"])
         self.assertIn("59%", values["Visit timing distribution"])
         self.assertIn("14 days", values["Visit timing distribution"])

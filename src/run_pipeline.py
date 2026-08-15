@@ -43,6 +43,15 @@ PROJECT_ROOT = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 DATA_PROCESSED = PROJECT_ROOT / "data" / "processed"
 RESULTS_TABLES = PROJECT_ROOT / "results" / "tables"
+RESULTS_FIGURES = PROJECT_ROOT / "results" / "figures"
+FINAL_FIGURES = PROJECT_ROOT / "results" / "final_figures"
+FINAL_FIGURE_STUBS = (
+    "fig1_choropleth_grid",
+    "fig2_ridgeline_nssp_seasons",
+    "fig3_infant_ppx_early_start_advantage_forest",
+    "fig4_infant_ppx_hospitalizations_averted_by_window",
+    "fig5_infant_ppx_hospitalizations_averted_primary_vs_50pct_uptake",
+)
 
 
 def load_config() -> dict:
@@ -82,6 +91,40 @@ def run_r_figures() -> None:
         check=True,
         cwd=PROJECT_ROOT,
     )
+
+
+def publish_final_figures() -> None:
+    """Publish manuscript Figures 1-5 to the final delivery directory.
+
+    Supplemental figures remain in results/figures. Build the new directory in a
+    staging location so a failed or incomplete figure run does not replace the
+    last complete final-figure set.
+    """
+    staging = PROJECT_ROOT / "results" / ".final_figures_staging"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+
+    expected = [
+        f"{stub}.{extension}"
+        for stub in FINAL_FIGURE_STUBS
+        for extension in ("png", "pdf")
+    ]
+    missing = [name for name in expected if not (RESULTS_FIGURES / name).is_file()]
+    if missing:
+        shutil.rmtree(staging)
+        raise FileNotFoundError(
+            "Cannot publish final figures; missing generated files: "
+            + ", ".join(sorted(missing))
+        )
+
+    for name in expected:
+        shutil.copy2(RESULTS_FIGURES / name, staging / name)
+
+    if FINAL_FIGURES.exists():
+        shutil.rmtree(FINAL_FIGURES)
+    staging.rename(FINAL_FIGURES)
+    logger.info("Published Figures 1-5 to %s", FINAL_FIGURES)
 
 
 def attach_metric_label(df: pd.DataFrame, metric_label: str) -> pd.DataFrame:
@@ -175,6 +218,18 @@ def create_infant_stress_window_summary(
             "birth_weight_scheme": (
                 group["birth_weight_scheme"].iloc[0]
                 if "birth_weight_scheme" in group else None
+            ),
+            "receipt_history_mode": (
+                group["receipt_history_mode"].iloc[0]
+                if "receipt_history_mode" in group else None
+            ),
+            "program_start_season_year": (
+                group["program_start_season_year"].iloc[0]
+                if "program_start_season_year" in group else None
+            ),
+            "catchup_if_no_routine_visit": (
+                group["catchup_if_no_routine_visit"].iloc[0]
+                if "catchup_if_no_routine_visit" in group else None
             ),
         })
         rows.append(row)
@@ -307,7 +362,7 @@ def create_infant_hospitalizations_averted(
     )
 
     datasource = translation_cfg.get("datasource", "nssp")
-    scenario_id = translation_cfg.get("scenario_id", "uptake_100")
+    scenario_id = translation_cfg.get("scenario_id", "uptake_50")
     baseline_window = translation_cfg.get("baseline_window", "baseline_oct_mar")
     comparison_window = translation_cfg.get("comparison_window", "early_sep_mar")
     comparison_window_label = {
@@ -492,7 +547,11 @@ def filter_nhsn_by_completeness(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
+def run_pipeline(
+    offline: bool = False,
+    refresh_data: bool = False,
+    skip_figures: bool = False,
+) -> dict:
     """Run the accepted-manuscript analysis using the configured data cutoff."""
     logger.info("RSV TIMING 2025-26 EXTENSION PIPELINE")
     logger.info(f"Started at: {datetime.now().isoformat()}")
@@ -672,45 +731,38 @@ def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
 
         stress_state_parts = []
 
-        config_primary = primary_config(12, "Primary model")
+        config_primary = primary_config(
+            12,
+            "Seasonal coverage at first eligible visit",
+        )
         save_table(
             create_primary_parameter_table(config_primary),
             "infant_ppx_model_parameters",
         )
-        logger.info("  Primary model, 12-month exposure censor")
+        logger.info(
+            "  Seasonal coverage at first eligible visit, 12-month exposure censor"
+        )
         primary_parts = run_model_pair(config_primary)
         stress_state_parts.extend(tag_stress_state(
             primary_parts,
             scenario_id="reference_12mo",
             scenario_family="Reference",
-            scenario_label="Primary model",
+            scenario_label="Seasonal coverage at first eligible visit",
             scenario_order=1,
         ))
 
-        # Uptake is a direct multiplier in the deterministic model. Derive these
-        # sensitivities exactly from the primary state summaries instead of
-        # rerunning every birth cohort three times.
-        uptake_scaled_columns = [
-            "share_receiving_ppx",
-            "median_person_activity_fractional_protection",
-            "q25_person_activity_fractional_protection",
-            "q75_person_activity_fractional_protection",
-            "mean_person_activity_fractional_protection",
-            "population_activity_weighted_protection",
-            "median_person_calendar_fractional_protection",
-            "mean_person_calendar_fractional_protection",
-        ]
-        primary_uptake = float(config["infant_ppx_model"]["uptake"])
+        # Later-season catch-up has probability (1-u)*u, so protection is not
+        # generally linear in uptake. Rerun each uptake level rather than scaling
+        # the 18.5% primary output.
         for uptake, order in ((0.50, 10), (0.75, 11), (1.00, 12)):
-            scaled_parts = []
-            for part in primary_parts:
-                scaled = part.copy()
-                for column in uptake_scaled_columns:
-                    scaled[column] = scaled[column] * uptake / primary_uptake
-                scaled["uptake"] = uptake
-                scaled_parts.append(scaled)
+            uptake_config = primary_config(
+                12, f"Uptake {int(uptake * 100)}%; otherwise primary"
+            )
+            uptake_config["infant_ppx_model"]["uptake"] = uptake
+            logger.info("  Sensitivity model, uptake %s%%", int(uptake * 100))
+            uptake_parts = run_model_pair(uptake_config)
             stress_state_parts.extend(tag_stress_state(
-                scaled_parts,
+                uptake_parts,
                 scenario_id=f"uptake_{int(uptake * 100)}",
                 scenario_family="Uptake",
                 scenario_label=f"Uptake {int(uptake * 100)}%; otherwise primary",
@@ -760,6 +812,13 @@ def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
 
         stress_specs = [
             (
+                "catchup_no_routine_visit",
+                "Receipt opportunity",
+                "Catch-up at window start when no eligible routine visit remains; otherwise primary",
+                5,
+                {"catchup_if_no_routine_visit": True},
+            ),
+            (
                 "newborn_first_week_20",
                 "Newborn dosing",
                 "First-week dosing 20%; otherwise primary",
@@ -797,7 +856,9 @@ def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
             stress_ranking = create_infant_stress_ranking(stress_window_summary)
             hospitalization_rows = []
             hospitalization_summaries = []
-            for scenario_id in ("reference_12mo", "uptake_100"):
+            # Translate every retained stress scenario on both fractional-protection
+            # and absolute-hospitalization scales.
+            for scenario_id in sorted(stress_state["scenario_id"].unique()):
                 for comparison_window in ("early_sep_mar", "late_oct_apr", "year_round"):
                     translation_config = deepcopy(config)
                     translation = translation_config.setdefault(
@@ -816,13 +877,19 @@ def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
             save_table(stress_window_summary, "infant_ppx_stress_test_window_summary")
             save_table(stress_ranking, "infant_ppx_stress_test_ranking")
             if hospitalization_rows:
+                combined_hospitalization_rows = pd.concat(
+                    hospitalization_rows, ignore_index=True
+                )
                 save_table(
-                    pd.concat(hospitalization_rows, ignore_index=True),
+                    combined_hospitalization_rows,
                     "infant_ppx_hospitalizations_averted",
                 )
             if hospitalization_summaries:
+                combined_hospitalization_summaries = pd.concat(
+                    hospitalization_summaries, ignore_index=True
+                )
                 save_table(
-                    pd.concat(hospitalization_summaries, ignore_index=True),
+                    combined_hospitalization_summaries,
                     "infant_ppx_hospitalizations_averted_summary",
                 )
     else:
@@ -857,8 +924,12 @@ def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
     # ------------------------------------------------------------------
     # Figures
     # ------------------------------------------------------------------
-    logger.info("\nStep 12: Generating figures with R...")
-    run_r_figures()
+    if skip_figures:
+        logger.info("\nStep 12: Figure generation skipped by request.")
+    else:
+        logger.info("\nStep 12: Generating figures with R...")
+        run_r_figures()
+        publish_final_figures()
 
     logger.info(f"\nPipeline completed at: {datetime.now().isoformat()}")
 
@@ -875,6 +946,7 @@ def run_pipeline(offline: bool = False, refresh_data: bool = False) -> dict:
 
 def generate_figures_only() -> dict:
     run_r_figures()
+    publish_final_figures()
     return {}
 
 
@@ -888,12 +960,18 @@ def main():
                         help="Re-fetch public inputs through the configured cutoff")
     parser.add_argument("--figures-only", action="store_true",
                         help="Only regenerate figures using existing processed data")
+    parser.add_argument("--skip-figures", action="store_true",
+                        help="Run all analyses and tables without invoking R")
     args = parser.parse_args()
 
     if args.figures_only:
         generate_figures_only()
     else:
-        run_pipeline(offline=args.offline, refresh_data=args.refresh_data)
+        run_pipeline(
+            offline=args.offline,
+            refresh_data=args.refresh_data,
+            skip_figures=args.skip_figures,
+        )
 
 
 if __name__ == "__main__":

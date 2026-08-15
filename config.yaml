@@ -129,17 +129,25 @@ analysis:
 #   late_oct_apr:     Oct 1 - Apr 30
 #   year_round:       Jul 1 - Jun 30 (evaluated at steady state)
 
-# Published primary infant prophylaxis protection model. This is a deliberately explainable
-# visit-opportunity model: births are uniform by day, eligible infants receive
-# prophylaxis at the first routine well-child visit that falls inside the
-# scenario window, and protection is evaluated against each state's observed
-# RSV curve.
+# Primary infant prophylaxis protection model. This is a deliberately
+# explainable seasonal-coverage model: births are uniform by day, and uptake is
+# the probability that a previously untreated infant with an eligible opportunity
+# receives prophylaxis at the first such visit in an annual window. Protection is
+# evaluated against each state's observed RSV curve.
 infant_ppx_model:
   enabled: true
-  scenario_label: "Primary model"
+  scenario_label: "Seasonal coverage at first eligible visit"
+  # Probability of receipt among previously untreated infants with an eligible
+  # opportunity in one annual administration window. This is not a fresh chance
+  # at every visit.
   uptake: 0.185
   eligibility_max_age_months: 8
   exposure_censor_age_months: 12
+  # Receipt history is carried across annual windows. An untreated infant remains
+  # eligible in a later annual window if still younger than 8 months and a modeled
+  # opportunity exists; a prior recipient is not redosed.
+  receipt_history_mode: "seasonal_coverage_first_visit"
+  program_start_season_year: 2023
   protection_delay_days: 6       # median nirsevimab time to maximum concentration
   protection_duration_days: 210
   efficacy_profile: "piecewise_linear"
@@ -180,7 +188,10 @@ infant_ppx_model:
     10: 1.03
     11: 0.98
     12: 0.98
-  allow_window_start_catchup: false
+  # Sensitivity only: if an untreated infant is already born and age-eligible at
+  # window start but has no routine well-child visit before aging out/window close,
+  # add one opportunity at window start. The primary model leaves this off.
+  catchup_if_no_routine_visit: false
 
 # Translation from modeled protection to expected hospitalizations averted.
 # This keeps the timing model based on state RSV curves and uses external,
@@ -188,7 +199,7 @@ infant_ppx_model:
 infant_hospitalization_translation:
   enabled: true
   datasource: "nssp"
-  scenario_id: "uptake_100"
+  scenario_id: "uptake_50"
   comparison_window: "early_sep_mar"
   baseline_window: "baseline_oct_mar"
   infant_population_file: "data/raw/us_state_infant_population_2023_census_pep.csv"

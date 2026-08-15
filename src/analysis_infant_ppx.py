@@ -1,8 +1,8 @@
 """
 Infant RSV prophylaxis protection model.
 
-This module estimates how much of each infant cohort's first-season RSV
-exposure would occur while protected under fixed prophylaxis windows.
+This module estimates how much of each infant cohort's RSV exposure would occur
+while protected under recurring fixed prophylaxis windows.
 
 Model intent:
 - Explainable, visit-opportunity based mechanics.
@@ -14,6 +14,7 @@ Model intent:
 
 from __future__ import annotations
 
+import calendar
 import logging
 from pathlib import Path
 from typing import Iterable
@@ -55,8 +56,10 @@ WINDOW_LABELS = {
 
 PARAMETER_SOURCE_ROWS = {
     "uptake": (
-        "Primary model uses 18.5% empirical 2023-24 nirsevimab uptake from "
-        "Boundy et al. MMWR 2025; 100% uptake is an idealized sensitivity."
+        "The primary model uses 18.5% empirical 2023-24 nirsevimab uptake from "
+        "Boundy et al. MMWR 2025 as seasonal coverage among previously untreated "
+        "infants with an eligible opportunity. Recipients receive prophylaxis at "
+        "their first eligible visit in that annual window."
     ),
     "eligibility_max_age_months": (
         "CDC/ACIP infant RSV antibody guidance recommends protection for eligible "
@@ -130,10 +133,20 @@ PARAMETER_SOURCE_ROWS = {
         "CDC WONDER/NCHS Natality state-month births for a future fully empirical "
         "state-specific birth-seasonality analysis."
     ),
-    "allow_window_start_catchup": (
-        "Scenario parameter. CDC says eligible infants born outside the seasonal "
-        "administration window should receive RSV antibody shortly before the RSV "
-        "season; setting this true approximates a catch-up campaign at window start."
+    "catchup_if_no_routine_visit": (
+        "Scenario parameter. For a previously untreated infant who is age-eligible "
+        "at the start of an annual administration window but has no routine "
+        "well-child visit in that window before aging out, setting this true adds "
+        "one fallback opportunity at window start. This approximates administration "
+        "during another healthcare encounter without accelerating infants who have "
+        "a modeled routine visit."
+    ),
+    "receipt_history_mode": (
+        "The primary model carries each birth cohort's administration history "
+        "forward from the 2023-24 program launch. In each annual window, uptake is "
+        "the probability of receipt among previously untreated infants with an "
+        "eligible opportunity; recipients are dosed at the first such visit and "
+        "are not redosed."
     ),
 }
 
@@ -178,9 +191,13 @@ def _season_bounds(season: str) -> tuple[pd.Timestamp, pd.Timestamp]:
 def _window_bounds(season: str, window_name: str) -> tuple[pd.Timestamp, pd.Timestamp]:
     start_year, end_year = [int(x) for x in season.split("-")]
     spec = WINDOWS[window_name]
+    end_day = min(
+        spec["end_day"],
+        calendar.monthrange(end_year, spec["end_month"])[1],
+    )
     return (
         pd.Timestamp(year=start_year, month=spec["start_month"], day=spec["start_day"]),
-        pd.Timestamp(year=end_year, month=spec["end_month"], day=spec["end_day"]),
+        pd.Timestamp(year=end_year, month=spec["end_month"], day=end_day),
     )
 
 
@@ -341,22 +358,194 @@ def _expand_weekly_curve_to_daily(
     return daily
 
 
-def _first_administration_date(
+def _eligible_routine_administration_dates(
     birth_date: pd.Timestamp,
     visit_days: list[int],
     window_start: pd.Timestamp,
     window_end: pd.Timestamp,
     eligibility_max_age_days: int,
-) -> pd.Timestamp | None:
-    for visit_day in visit_days:
-        visit_date = birth_date + pd.Timedelta(days=visit_day)
-        if visit_date < window_start:
+) -> list[pd.Timestamp]:
+    """Return every age-eligible routine visit inside one policy window."""
+    dates = {
+        birth_date + pd.Timedelta(days=int(visit_day))
+        for visit_day in visit_days
+        if 0 <= int(visit_day) < eligibility_max_age_days
+        and window_start
+        <= birth_date + pd.Timedelta(days=int(visit_day))
+        <= window_end
+    }
+    return sorted(dates)
+
+
+RECEIPT_HISTORY_MODE = "seasonal_coverage_first_visit"
+
+
+def _window_bounds_for_start_year(
+    start_year: int,
+    window_name: str,
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Return one annual policy window identified by its starting year."""
+    spec = WINDOWS[window_name]
+    end_year = start_year + 1
+    end_day = min(
+        spec["end_day"],
+        calendar.monthrange(end_year, spec["end_month"])[1],
+    )
+    return (
+        pd.Timestamp(
+            year=start_year,
+            month=spec["start_month"],
+            day=spec["start_day"],
+        ),
+        pd.Timestamp(
+            year=end_year,
+            month=spec["end_month"],
+            day=end_day,
+        ),
+    )
+
+
+def _longitudinal_administration_paths(
+    birth_date: pd.Timestamp,
+    visit_days: list[int],
+    window_name: str,
+    eligibility_max_age_days: int,
+    model_cfg: dict,
+    routine_pathway: str,
+) -> list[dict]:
+    """Build mutually exclusive administration paths across recurring windows.
+
+    The first annual window with a modeled administration opportunity defines the
+    infant's initial opportunity. If birth occurs inside that window, the
+    newborn/first-week and routine routes remain mutually exclusive. The returned
+    ``seasonal_first_dates`` identify the first eligible visit in each annual
+    window while the infant remains age-eligible.
+    """
+    program_start_year = int(model_cfg.get("program_start_season_year", 2023))
+    catchup_if_no_routine_visit = bool(
+        model_cfg.get("catchup_if_no_routine_visit", False)
+    )
+    newborn_share = float(
+        model_cfg.get("newborn_first_week_dose_probability", 0.0)
+    )
+    newborn_day = int(round(model_cfg.get("newborn_dose_day", 0)))
+    annual_opportunities = []
+    eligibility_end = birth_date + pd.Timedelta(days=eligibility_max_age_days - 1)
+    first_possible_start_year = max(program_start_year, birth_date.year - 1)
+    # Enumerate the infant's complete age-eligible opportunity history even when a
+    # visit falls after the season currently being evaluated. This keeps the
+    # probability assigned to a past visit invariant across analysis horizons.
+    for start_year in range(first_possible_start_year, eligibility_end.year + 1):
+        window_start, window_end = _window_bounds_for_start_year(
+            start_year, window_name
+        )
+        if window_start > eligibility_end or window_end < birth_date:
             continue
-        if visit_date > window_end:
-            return None
-        if visit_day < eligibility_max_age_days:
-            return visit_date
-    return None
+
+        routine_dates = _eligible_routine_administration_dates(
+            birth_date,
+            visit_days,
+            window_start,
+            window_end,
+            eligibility_max_age_days,
+        )
+        add_window_start = catchup_if_no_routine_visit and not routine_dates
+        if add_window_start:
+            age_at_window_start = (window_start - birth_date).days
+            if 0 <= age_at_window_start < eligibility_max_age_days:
+                routine_dates = sorted(set(routine_dates + [window_start]))
+
+        newborn_date = birth_date + pd.Timedelta(days=newborn_day)
+        newborn_possible = (
+            newborn_share > 0
+            and newborn_day < eligibility_max_age_days
+            and window_start <= newborn_date <= window_end
+        )
+        if newborn_possible or routine_dates:
+            annual_opportunities.append({
+                "start_year": start_year,
+                "newborn_date": newborn_date if newborn_possible else None,
+                "routine_dates": routine_dates,
+            })
+
+    if not annual_opportunities:
+        return [{
+            "administration_pathway": routine_pathway,
+            "route_share": 1.0,
+            "primary_date": None,
+            "seasonal_first_dates": [],
+        }]
+
+    first = annual_opportunities[0]
+    routine_seasonal_first_dates = [
+        opportunity["routine_dates"][0]
+        for opportunity in annual_opportunities
+        if opportunity["routine_dates"]
+    ]
+    primary_routine_date = (
+        routine_seasonal_first_dates[0]
+        if routine_seasonal_first_dates else None
+    )
+
+    if first["newborn_date"] is not None:
+        newborn_seasonal_first_dates = [first["newborn_date"]] + [
+            opportunity["routine_dates"][0]
+            for opportunity in annual_opportunities[1:]
+            if opportunity["routine_dates"]
+        ]
+        return [
+            {
+                "administration_pathway": "newborn_first_week",
+                "route_share": newborn_share,
+                "primary_date": first["newborn_date"],
+                "seasonal_first_dates": newborn_seasonal_first_dates,
+            },
+            {
+                "administration_pathway": routine_pathway,
+                "route_share": 1.0 - newborn_share,
+                "primary_date": primary_routine_date,
+                "seasonal_first_dates": routine_seasonal_first_dates,
+            },
+        ]
+
+    return [{
+        "administration_pathway": routine_pathway,
+        "route_share": 1.0,
+        "primary_date": primary_routine_date,
+        "seasonal_first_dates": routine_seasonal_first_dates,
+    }]
+
+
+def _administration_date_probabilities(
+    route_spec: dict,
+    uptake: float,
+) -> list[tuple[pd.Timestamp, float]]:
+    """Return mutually exclusive probabilities for first receipt dates.
+
+    ``uptake`` is the probability that a previously untreated infant receives
+    prophylaxis in an annual window. Recipients are dosed at that window's first
+    eligible visit. If still untreated and eligible in a later annual window, the
+    infant has the same receipt probability there, producing mutually exclusive
+    first-receipt probabilities ``u, (1-u)u, ...``. Later visits within the same
+    annual window do not create additional modeled opportunities.
+    """
+    if not 0 <= uptake <= 1:
+        raise ValueError("uptake must be between 0 and 1.")
+    primary_date = route_spec.get("primary_date")
+    seasonal_dates = route_spec.get("seasonal_first_dates")
+    if seasonal_dates is None:
+        # Year-round is evaluated as one continuous steady-state program,
+        # not as repeated artificial July-June seasons.
+        seasonal_dates = [primary_date] if primary_date is not None else []
+    seasonal_dates = sorted(set(seasonal_dates))
+    return [
+        (
+            administration_date,
+            uptake * ((1.0 - uptake) ** season_index),
+        )
+        for season_index, administration_date in enumerate(seasonal_dates)
+        if uptake * ((1.0 - uptake) ** season_index) > 0
+    ]
 
 
 def _efficacy_values(
@@ -418,21 +607,17 @@ def _efficacy_values(
     return np.clip(efficacy, 0.0, 1.0)
 
 
-def year_round_steady_state_protection(model_cfg: dict) -> float:
-    """Activity-weighted protection for a year-round (any-time-of-year) birth-dose
-    program, evaluated at steady state.
+def year_round_steady_state_metrics(model_cfg: dict) -> tuple[float, float]:
+    """Return protection and receipt for a year-round program at steady state.
 
     A year-round policy is a continuously running program, so it must be evaluated
     as an established (stationary) program rather than a single modeled season.
     Under uniform daily births and a periodic annual epidemic, the population is
     stationary: on every calendar day the same age-mix (and therefore the same
-    protected fraction) is present. The activity-weighted protected fraction then
-    reduces analytically to
-
-        uptake * mean_over_ages_0..censor( pathway-weighted efficacy since a
-        near-birth dose )
-
-    which is INDEPENDENT of the epidemic curve's timing or width. Computing
+    protected fraction) is present. Seasonal coverage is assigned once and
+    recipients are dosed at their first eligible visit; later visits do not create
+    additional annual receipt opportunities. The resulting protection is independent of the
+    epidemic curve's timing or width. Computing
     year-round within a single modeled season instead produces a startup artifact
     (the window effectively opens July 1 and doses a backlog of already-born
     infants), which spuriously favors early-onset seasons and penalizes late ones.
@@ -464,20 +649,59 @@ def year_round_steady_state_protection(model_cfg: dict) -> float:
         )
 
     eff_age = np.zeros(censor_days, dtype=float)
-    weight = 0.0
-    if newborn_share > 0 and newborn_dose_day < eligibility_max_age_days:
-        eff_age += newborn_share * eff_by_age(newborn_dose_day)
-        weight += newborn_share
-        routine_share = 1.0 - newborn_share
-    else:
-        routine_share = 1.0
+    receipt_probability = 0.0
+    total_path_weight = 0.0
     for schedule in schedules:
-        share = routine_share * schedule["schedule_probability"]
-        eff_age += share * eff_by_age(int(schedule["first_outpatient_visit_day"]))
-        weight += share
-    if weight > 0:
-        eff_age /= weight
-    return uptake * float(eff_age.mean())
+        routine_days = sorted({
+            int(day)
+            for day in schedule["visit_days"]
+            if 0 <= int(day) < eligibility_max_age_days
+        })
+        routine_dates = [ref + pd.Timedelta(days=day) for day in routine_days]
+        route_specs = []
+        if newborn_share > 0 and newborn_dose_day < eligibility_max_age_days:
+            newborn_date = ref + pd.Timedelta(days=newborn_dose_day)
+            route_specs.append({
+                "route_share": newborn_share,
+                "primary_date": newborn_date,
+            })
+            routine_share = 1.0 - newborn_share
+        else:
+            routine_share = 1.0
+        route_specs.append({
+            "route_share": routine_share,
+            "primary_date": routine_dates[0] if routine_dates else None,
+        })
+
+        for route_spec in route_specs:
+            path_weight = (
+                float(schedule["schedule_probability"])
+                * float(route_spec["route_share"])
+            )
+            if path_weight <= 0:
+                continue
+            date_probabilities = _administration_date_probabilities(
+                route_spec,
+                uptake,
+            )
+            total_path_weight += path_weight
+            receipt_probability += path_weight * sum(
+                probability for _, probability in date_probabilities
+            )
+            for administration_date, probability in date_probabilities:
+                dose_age = int((administration_date - ref).days)
+                eff_age += path_weight * probability * eff_by_age(dose_age)
+
+    if total_path_weight > 0:
+        eff_age /= total_path_weight
+        receipt_probability /= total_path_weight
+    return float(eff_age.mean()), float(receipt_probability)
+
+
+def year_round_steady_state_protection(model_cfg: dict) -> float:
+    """Backward-compatible scalar wrapper for steady-state protection."""
+    protection, _ = year_round_steady_state_metrics(model_cfg)
+    return protection
 
 
 def _cohort_rows_for_group(
@@ -503,11 +727,18 @@ def _cohort_rows_for_group(
     protection_duration_days = int(round(model_cfg.get("protection_duration_days", 180)))
     efficacy_profile = model_cfg.get("efficacy_profile", "binary")
     uptake = float(model_cfg.get("uptake", 1.0))
-    allow_window_start_catchup = bool(model_cfg.get("allow_window_start_catchup", False))
+    receipt_history_mode = model_cfg.get("receipt_history_mode", RECEIPT_HISTORY_MODE)
+    if receipt_history_mode != RECEIPT_HISTORY_MODE:
+        raise ValueError(
+            f"Unsupported receipt_history_mode={receipt_history_mode!r}; "
+            f"the publication pipeline requires {RECEIPT_HISTORY_MODE!r}."
+        )
+    catchup_if_no_routine_visit = bool(
+        model_cfg.get("catchup_if_no_routine_visit", False)
+    )
     newborn_first_week_dose_probability = float(
         model_cfg.get("newborn_first_week_dose_probability", 0.0)
     )
-    newborn_dose_day = int(round(model_cfg.get("newborn_dose_day", 0)))
     if not 0 <= newborn_first_week_dose_probability <= 1:
         raise ValueError("newborn_first_week_dose_probability must be between 0 and 1.")
 
@@ -552,57 +783,69 @@ def _cohort_rows_for_group(
             visit_days = schedule["visit_days"]
             schedule_probability = schedule["schedule_probability"]
 
-            for window_name, (window_start, window_end) in window_bounds.items():
-                routine_admin_date = _first_administration_date(
-                    birth_date, visit_days, window_start, window_end, eligibility_max_age_days
+            for window_name in window_bounds:
+                routine_pathway = schedule.get(
+                    "visit_timing_pathway", "routine"
+                )
+                route_specs = _longitudinal_administration_paths(
+                    birth_date=birth_date,
+                    visit_days=visit_days,
+                    window_name=window_name,
+                    eligibility_max_age_days=eligibility_max_age_days,
+                    model_cfg=model_cfg,
+                    routine_pathway=routine_pathway,
                 )
 
-                if routine_admin_date is None and allow_window_start_catchup:
-                    age_at_window_start = (window_start - birth_date).days
-                    if 0 <= age_at_window_start < eligibility_max_age_days:
-                        routine_admin_date = window_start
-
-                newborn_admin_date = birth_date + pd.Timedelta(days=newborn_dose_day)
-                newborn_possible = (
-                    newborn_first_week_dose_probability > 0
-                    and window_start <= newborn_admin_date <= window_end
-                    and newborn_dose_day < eligibility_max_age_days
-                )
-                newborn_route_share = (
-                    newborn_first_week_dose_probability if newborn_possible else 0.0
-                )
-                route_specs = []
-                if newborn_route_share > 0:
-                    route_specs.append((
-                        "newborn_first_week",
-                        newborn_admin_date,
-                        newborn_route_share,
-                    ))
-                route_specs.append((
-                    schedule.get("visit_timing_pathway", "routine"),
-                    routine_admin_date,
-                    1.0 - newborn_route_share,
-                ))
-
-                for administration_pathway, admin_date, route_share in route_specs:
+                for route_spec in route_specs:
+                    administration_pathway = route_spec["administration_pathway"]
+                    route_share = float(route_spec["route_share"])
                     row_weight = birth_weight * schedule_probability * route_share
                     if row_weight <= 0:
                         continue
 
-                    received_ppx = admin_date is not None
-                    efficacy_key = admin_date.date().isoformat() if admin_date is not None else None
-                    if efficacy_key not in efficacy_cache:
-                        efficacy_cache[efficacy_key] = _efficacy_values(
-                            dates,
-                            admin_date,
-                            model_cfg,
-                            protection_delay_days,
-                            protection_duration_days,
+                    date_probabilities = _administration_date_probabilities(
+                        route_spec,
+                        uptake,
+                    )
+                    activity_numerator = 0.0
+                    calendar_numerator = 0.0
+                    for admin_date, dose_probability in date_probabilities:
+                        efficacy_key = admin_date.date().isoformat()
+                        if efficacy_key not in efficacy_cache:
+                            efficacy_cache[efficacy_key] = _efficacy_values(
+                                dates,
+                                admin_date,
+                                model_cfg,
+                                protection_delay_days,
+                                protection_duration_days,
+                            )
+                        efficacy = efficacy_cache[efficacy_key]
+                        activity_numerator += (
+                            float((activity[at_risk] * efficacy[at_risk]).sum())
+                            * dose_probability
                         )
-                    efficacy = efficacy_cache[efficacy_key]
+                        calendar_numerator += (
+                            float(efficacy[at_risk].sum()) * dose_probability
+                        )
 
-                    activity_numerator = float((activity[at_risk] * efficacy[at_risk]).sum()) * uptake
-                    calendar_numerator = float(efficacy[at_risk].sum()) * uptake
+                    received_ppx = bool(date_probabilities)
+                    receipt_probability = float(
+                        sum(probability for _, probability in date_probabilities)
+                    )
+                    prior_season_receipt_probability = float(sum(
+                        probability
+                        for administration_date, probability in date_probabilities
+                        if administration_date < season_start
+                    ))
+                    current_season_receipt_probability = float(sum(
+                        probability
+                        for administration_date, probability in date_probabilities
+                        if season_start <= administration_date <= season_end
+                    ))
+                    administration_dates = ";".join(
+                        administration_date.date().isoformat()
+                        for administration_date, _ in date_probabilities
+                    )
 
                     if activity_denominator > 0:
                         activity_fraction = activity_numerator / activity_denominator
@@ -627,7 +870,11 @@ def _cohort_rows_for_group(
                         "route_share": route_share,
                         "cohort_weight": row_weight,
                         "received_ppx": received_ppx,
-                        "administration_date": admin_date.date().isoformat() if received_ppx else None,
+                        "administration_date": administration_dates or None,
+                        "receipt_probability": receipt_probability,
+                        "prior_season_receipt_probability": prior_season_receipt_probability,
+                        "current_season_receipt_probability": current_season_receipt_probability,
+                        "n_administration_opportunities": len(date_probabilities),
                         "activity_denominator": activity_denominator,
                         "activity_numerator": activity_numerator,
                         "activity_fractional_protection": activity_fraction,
@@ -641,7 +888,13 @@ def _cohort_rows_for_group(
                         "eligibility_max_age_days": eligibility_max_age_days,
                         "exposure_censor_age_days": exposure_censor_age_days,
                         "birth_weight_scheme": birth_weight_scheme,
-                        "allow_window_start_catchup": allow_window_start_catchup,
+                        "catchup_if_no_routine_visit": (
+                            catchup_if_no_routine_visit
+                        ),
+                        "receipt_history_mode": receipt_history_mode,
+                        "program_start_season_year": int(
+                            model_cfg.get("program_start_season_year", 2023)
+                        ),
                     })
 
     return pd.DataFrame(rows)
@@ -662,10 +915,13 @@ def _summarise_state(cohort_df: pd.DataFrame) -> pd.DataFrame:
         activity_exposure = group["activity_denominator"].to_numpy(dtype=float) * weights
         total_activity_exposure = float(np.nansum(activity_exposure))
         population_activity_numerator = float(np.nansum(group["activity_numerator"].to_numpy(dtype=float) * weights))
-        actual_receipt = (
-            group["received_ppx"].astype(float).to_numpy(dtype=float)
-            * group["uptake"].to_numpy(dtype=float)
-        )
+        if "receipt_probability" in group:
+            actual_receipt = group["receipt_probability"].to_numpy(dtype=float)
+        else:
+            actual_receipt = (
+                group["received_ppx"].astype(float).to_numpy(dtype=float)
+                * group["uptake"].to_numpy(dtype=float)
+            )
 
         row = dict(zip(group_cols, keys))
         row.update({
@@ -696,7 +952,13 @@ def _summarise_state(cohort_df: pd.DataFrame) -> pd.DataFrame:
             "eligibility_max_age_days": int(group["eligibility_max_age_days"].iloc[0]),
             "exposure_censor_age_days": int(group["exposure_censor_age_days"].iloc[0]),
             "birth_weight_scheme": group["birth_weight_scheme"].iloc[0],
-            "allow_window_start_catchup": bool(group["allow_window_start_catchup"].iloc[0]),
+            "catchup_if_no_routine_visit": bool(
+                group["catchup_if_no_routine_visit"].iloc[0]
+            ),
+            "receipt_history_mode": group["receipt_history_mode"].iloc[0],
+            "program_start_season_year": int(
+                group["program_start_season_year"].iloc[0]
+            ),
         })
         rows.append(row)
 
@@ -712,10 +974,13 @@ def _summarise_birth_month(cohort_df: pd.DataFrame) -> pd.DataFrame:
     for keys, group in cohort_df.groupby(group_cols):
         weights = group["cohort_weight"].to_numpy(dtype=float)
         activity_frac = group["activity_fractional_protection"].to_numpy(dtype=float)
-        actual_receipt = (
-            group["received_ppx"].astype(float).to_numpy(dtype=float)
-            * group["uptake"].to_numpy(dtype=float)
-        )
+        if "receipt_probability" in group:
+            actual_receipt = group["receipt_probability"].to_numpy(dtype=float)
+        else:
+            actual_receipt = (
+                group["received_ppx"].astype(float).to_numpy(dtype=float)
+                * group["uptake"].to_numpy(dtype=float)
+            )
         rows.append({
             **dict(zip(group_cols, keys)),
             "median_person_activity_fractional_protection": _weighted_quantile(activity_frac, weights, 0.50),
@@ -779,6 +1044,16 @@ def create_primary_parameter_table(config: dict) -> pd.DataFrame:
             "source_detail": PARAMETER_SOURCE_ROWS["eligibility_max_age_months"],
         },
         {
+            "parameter": "Receipt history",
+            "value": "Prior recipients not redosed",
+            "source": "Modeling implementation",
+            "rationale": (
+                "Untreated infants may receive in a later annual window if "
+                "age-eligible and a modeled opportunity exists"
+            ),
+            "source_detail": PARAMETER_SOURCE_ROWS["receipt_history_mode"],
+        },
+        {
             "parameter": "Exposure censor",
             "value": (
                 f"{model['exposure_censor_age_months']} months (primary); "
@@ -794,11 +1069,13 @@ def create_primary_parameter_table(config: dict) -> pd.DataFrame:
         {
             "parameter": "Uptake",
             "value": (
-                f"{uptake_pct:g}% (primary); 50%, 75%, 100% (sensitivity)"
+                f"{uptake_pct:g}% (primary); "
+                "50%, 75%, 100% (sensitivity)"
             ),
             "source": "Boundy et al., MMWR 2025",
             "rationale": (
-                "2023-2024 implementation anchor with idealized stress scenarios"
+                "Seasonal coverage among previously untreated infants with an "
+                "eligible visit"
             ),
             "source_detail": PARAMETER_SOURCE_ROWS["uptake"],
         },
@@ -936,7 +1213,7 @@ def run_infant_ppx_analysis(
     # year_round_steady_state_protection). Windowed policies are genuinely
     # single-season and are left unchanged.
     if "year_round" in set(WINDOWS):
-        yr_ss = year_round_steady_state_protection(model_cfg)
+        yr_ss, yr_receipt = year_round_steady_state_metrics(model_cfg)
         yr_mask = state_summary["window_name"] == "year_round"
         for _col in (
             "population_activity_weighted_protection",
@@ -947,11 +1224,7 @@ def run_infant_ppx_analysis(
         ):
             if _col in state_summary.columns:
                 state_summary.loc[yr_mask, _col] = yr_ss
-        # In a continuously operating year-round program, every modeled dosing
-        # pathway has an eligible visit; receipt therefore equals scenario uptake.
-        state_summary.loc[yr_mask, "share_receiving_ppx"] = state_summary.loc[
-            yr_mask, "uptake"
-        ]
+        state_summary.loc[yr_mask, "share_receiving_ppx"] = yr_receipt
 
     birth_month_summary = (
         _summarise_birth_month(cohort_df)

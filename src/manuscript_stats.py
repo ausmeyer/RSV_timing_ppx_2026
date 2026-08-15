@@ -360,7 +360,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             )
             add()
 
-    add("PARAGRAPH 8 - Hospitalization Translation (100% uptake scenario)")
+    add("PARAGRAPH 8 - Hospitalization Translation (50% uptake scenario)")
     add("-" * 80)
     add()
     hosp_summary = infant_hosp_averted_summary
@@ -374,7 +374,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             "late_oct_apr": 2,
             "year_round": 3,
         }
-        hosp_summary = hosp_summary[hosp_summary["scenario_id"] == "uptake_100"].copy()
+        hosp_summary = hosp_summary[hosp_summary["scenario_id"] == "uptake_50"].copy()
         hosp_summary["_comparison_order"] = (
             hosp_summary["comparison_window_name"].map(comparison_order).fillna(99)
         )
@@ -382,7 +382,7 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             add(
                 f"  {row['season']}: {row['comparison']} averted an estimated "
                 f"{row[total_col]:.0f} RSV hospitalizations "
-                f"nationally under the 100% uptake, otherwise-primary scenario "
+                f"nationally under the 50% uptake, otherwise-primary scenario "
                 f"(median state={row['median_state_hospitalizations_averted']:.1f}; "
                 f"IQR={row['q25_state_hospitalizations_averted']:.1f}-"
                 f"{row['q75_state_hospitalizations_averted']:.1f})."
@@ -515,11 +515,12 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     add("-" * 80)
     add("  - Daily birth cohorts with births uniformly distributed across calendar days")
     add("  - Cohorts begin with infants who could be eligible at the earliest scenario window")
-    add("  - Eligible infants receive prophylaxis through newborn/first-week or routine-care opportunities inside each scenario window")
-    add("  - Reference assumptions: 18.5% uptake, 38.1% newborn/first-week dosing among recipients, eligibility for receipt before age 8 months, and follow-up censored at age 12 months")
+    add("  - In each annual window, uptake is the probability of receipt among previously untreated infants with an eligible opportunity; recipients are dosed at the first such visit")
+    add("  - Untreated infants may receive prophylaxis in a later annual window only if still younger than 8 months; prior recipients are not redosed")
+    add("  - Reference assumptions: 18.5% seasonal nirsevimab uptake, 38.1% newborn/first-week dosing among recipients, eligibility for receipt before age 8 months, and follow-up censored at age 12 months")
     add("  - Protection assumptions: 6-day rise to peak concentration and smoothed time-varying effectiveness through day 210")
     add("  - Primary metrics: cohort-weighted median population-level fractional protection and population activity-weighted protection")
-    add("  - Hospitalization translation uses the 100% uptake scenario to isolate timing effects")
+    add("  - Main hospitalization translation display uses the 50% uptake scenario")
     add("  - State-season RSV exposure weights come from the observed NSSP or NHSN epidemic curve")
     add()
     add("=" * 80)
