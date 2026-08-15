@@ -11,6 +11,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 TABLES = ROOT / "results" / "tables"
 FIGURES = ROOT / "results" / "figures"
+FINAL_FIGURES = ROOT / "results" / "final_figures"
 
 EXPECTED_TABLES = {
     "bootstrap_ci_summary.csv",
@@ -33,9 +34,17 @@ FIGURE_STUBS = {
     "fig2_ridgeline_nssp_seasons",
     "fig3_infant_ppx_early_start_advantage_forest",
     "fig4_infant_ppx_hospitalizations_averted_by_window",
-    "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake",
+    "fig5_infant_ppx_hospitalizations_averted_primary_vs_50pct_uptake",
     "nhsn_fig_supp_timeseries",
     "nssp_fig_supp_timeseries",
+}
+
+FINAL_FIGURE_STUBS = {
+    "fig1_choropleth_grid",
+    "fig2_ridgeline_nssp_seasons",
+    "fig3_infant_ppx_early_start_advantage_forest",
+    "fig4_infant_ppx_hospitalizations_averted_by_window",
+    "fig5_infant_ppx_hospitalizations_averted_primary_vs_50pct_uptake",
 }
 
 
@@ -62,11 +71,42 @@ def main() -> None:
         f"unexpected={sorted(observed_figures - expected_figures)}"
     ))
 
+    observed_final_figures = {
+        path.name for path in FINAL_FIGURES.glob("*") if path.is_file()
+    }
+    expected_final_figures = {
+        f"{stub}.{extension}"
+        for stub in FINAL_FIGURE_STUBS
+        for extension in ("png", "pdf")
+    }
+    require(observed_final_figures == expected_final_figures, (
+        "Final-figure contract mismatch. "
+        f"Missing={sorted(expected_final_figures - observed_final_figures)}; "
+        f"unexpected={sorted(observed_final_figures - expected_final_figures)}"
+    ))
+    for name in sorted(expected_final_figures):
+        require(
+            (FIGURES / name).read_bytes() == (FINAL_FIGURES / name).read_bytes(),
+            f"Final figure is not byte-identical to generated source: {name}",
+        )
+
     config = yaml.safe_load((ROOT / "config.yaml").read_text())
     model = config["infant_ppx_model"]
     require(model["uptake"] == 0.185, "Primary uptake must be encoded as 18.5%.")
     require(model["efficacy_profile"] == "piecewise_linear", "Primary efficacy profile mismatch.")
     require(model["protection_duration_days"] == 210, "Primary protection duration mismatch.")
+    require(
+        model["receipt_history_mode"] == "seasonal_coverage_first_visit",
+        "Primary model must use seasonal uptake at the first eligible visit.",
+    )
+    require(
+        model["program_start_season_year"] == 2023,
+        "Receipt history must begin with the actual 2023-24 program launch.",
+    )
+    require(
+        model["catchup_if_no_routine_visit"] is False,
+        "The no-routine-visit catch-up option must be off in the primary model.",
+    )
 
     parameters = pd.read_csv(TABLES / "infant_ppx_model_parameters.csv")
     expected_parameters = {
@@ -74,6 +114,7 @@ def main() -> None:
         "Primary timing curve",
         "Birth distribution",
         "Eligibility",
+        "Receipt history",
         "Exposure censor",
         "Uptake",
         "Newborn/first-week dosing pathway",
@@ -97,6 +138,16 @@ def main() -> None:
     )
     parameter_values = parameters.set_index("parameter")["value"].to_dict()
     require("18.5%" in parameter_values["Uptake"], "Parameter table uptake mismatch.")
+    require(
+        parameter_values["Receipt history"] == "Prior recipients not redosed",
+        "Parameter table receipt-history wording does not match manuscript Table 2.",
+    )
+    require(
+        not parameters.astype(str).apply(
+            lambda column: column.str.contains("cor" + "rected", case=False).any()
+        ).any(),
+        "Parameter provenance table contains revision-history wording.",
+    )
     require("210" in parameter_values["Effectiveness curve"], "Parameter table duration mismatch.")
     require("38.1%" in parameter_values["Newborn/first-week dosing pathway"], "Parameter table newborn pathway mismatch.")
     require("59%" in parameter_values["Visit timing distribution"], "Parameter table visit-timing mismatch.")
@@ -125,12 +176,64 @@ def main() -> None:
     stress = pd.read_csv(TABLES / "infant_ppx_stress_test_window_summary.csv")
     prohibited = {"bootstrap_pr_delta_gt_zero", "delta_ci_lower", "delta_ci_upper"}
     require(not prohibited.intersection(stress.columns), "Stress table contains inferential columns.")
+    expected_scenarios = {
+        "reference_12mo",
+        "censor_8mo",
+        "uptake_50",
+        "uptake_75",
+        "uptake_100",
+        "newborn_first_week_20",
+        "newborn_first_week_60",
+        "visit_delay_0",
+        "visit_delay_30",
+        "waning_rapid",
+        "catchup_no_routine_visit",
+    }
+    require(
+        set(stress["scenario_id"]) == expected_scenarios,
+        "Stress table does not contain exactly the 11 retained scenarios.",
+    )
     primary = stress[stress["scenario_id"] == "reference_12mo"]
     require(set(primary["uptake"]) == {0.185}, "Primary rows do not use 18.5% uptake.")
+    require(
+        set(primary["receipt_history_mode"]) == {"seasonal_coverage_first_visit"},
+        "Primary rows do not use the configured longitudinal receipt history.",
+    )
+    require(
+        set(stress["receipt_history_mode"]) == {"seasonal_coverage_first_visit"},
+        "Stress rows contain an unsupported receipt-history comparator.",
+    )
+    catchup = stress[stress["scenario_id"] == "catchup_no_routine_visit"]
+    require(
+        set(catchup["catchup_if_no_routine_visit"]) == {True},
+        "Catch-up sensitivity does not enable its targeted receipt opportunity.",
+    )
+    noncatchup = stress[stress["scenario_id"] != "catchup_no_routine_visit"]
+    require(
+        set(noncatchup["catchup_if_no_routine_visit"]) == {False},
+        "Catch-up opportunity leaked into another sensitivity scenario.",
+    )
+    # Eligibility ends before 8 months, so a cohort can encounter at most two
+    # annual seasonal windows before aging out.
+    max_eligible_windows = 2
+    maximum_first_receipt_probability = 1 - (
+        (1 - stress["uptake"]) ** max_eligible_windows
+    )
+    require(
+        (
+            stress["median_share_receiving_ppx"]
+            <= maximum_first_receipt_probability + 1e-12
+        ).all(),
+        "Modeled receipt exceeds the bound from one opportunity per annual window.",
+    )
     year_round = primary[primary["window_name"] == "year_round"]
     require(
-        (year_round["median_share_receiving_ppx"] == year_round["uptake"]).all(),
-        "Year-round receipt must use the steady-state value.",
+        (
+            (year_round["median_share_receiving_ppx"] - year_round["uptake"])
+            .abs()
+            < 1e-12
+        ).all(),
+        "Year-round receipt must equal total uptake at steady state.",
     )
 
     hospitalizations = pd.read_csv(TABLES / "infant_ppx_hospitalizations_averted.csv")
@@ -143,6 +246,29 @@ def main() -> None:
         "Hospitalization table contains stale early-window column names.",
     )
     require((ROOT / "results" / "manuscript_stats.txt").is_file(), "Missing manuscript statistics summary.")
+
+    public_files = [
+        ROOT / "README.md",
+        ROOT / "config.yaml",
+        ROOT / "src" / "analysis_infant_ppx.py",
+        ROOT / "src" / "figures.R",
+        ROOT / "src" / "manuscript_stats.py",
+        ROOT / "src" / "run_pipeline.py",
+    ]
+    prohibited_phrases = (
+        "cor" + "rected primary model",
+        "seasonal_" + "cold_start",
+        "first_" + "opportunity_only",
+        "eligible_" + "until_receipt",
+        "allow_" + "window_start_catchup",
+    )
+    for path in public_files:
+        text = path.read_text().lower()
+        for phrase in prohibited_phrases:
+            require(
+                phrase.lower() not in text,
+                f"Obsolete or revision-history wording remains in {path.name}: {phrase}",
+            )
     print("Reproduction verified.")
 
 

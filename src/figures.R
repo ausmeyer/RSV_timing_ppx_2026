@@ -6,8 +6,8 @@
 #   Figure 1: choropleth grid of out-of-window RSV fraction
 #   Figure 2: ridgeline densities by season and age group
 #   Figure 3: window advantage over Oct-March baseline across stress-test scenarios
-#   Figure 4: per-state hospitalizations averted by window (100% uptake)
-#   Figure 5: national hospitalizations averted, primary model vs 100% uptake (panels A/B)
+#   Figure 4: per-state hospitalizations averted by window (50% uptake)
+#   Figure 5: national hospitalizations averted, primary model vs 50% uptake (panels A/B)
 #   Supplementary: state-level time series
 #
 
@@ -302,7 +302,7 @@ plot_ridgeline_nssp <- function(nssp_outside) {
 # =============================================================================
 
 
-# Revision Figure 3: protection advantage of each broadened window (September-
+# Figure 3: protection advantage of each broadened window (September-
 # March, October-April, year-round) over the October-March baseline, shown as a
 # dot-and-whisker forest across stress-test scenarios (median and IQR).
 plot_infant_ppx_window_advantage_forest <- function(stress_summary) {
@@ -327,7 +327,8 @@ plot_infant_ppx_window_advantage_forest <- function(stress_summary) {
   if (nrow(agg) == 0) return(invisible(NULL))
 
   labels_map <- c(
-    reference_12mo = "Primary Model", censor_8mo = "8-mo censor",
+    reference_12mo = "Primary", censor_8mo = "8-mo censor",
+    catchup_no_routine_visit = "Catch-up if no routine visit",
     uptake_50 = "Uptake 50%", uptake_75 = "Uptake 75%", uptake_100 = "Uptake 100%",
     newborn_first_week_20 = "First-week 20%", newborn_first_week_60 = "First-week 60%",
     visit_delay_0 = "No visit delay", visit_delay_30 = "30-day visit delay",
@@ -394,7 +395,7 @@ plot_infant_ppx_window_advantage_forest <- function(stress_summary) {
 
 # Figure 4: per-state distribution of expected hospitalizations averted vs the
 # October-March baseline, by season, for three windows (September-March,
-# October-April, year-round) shown as grouped violins (100% uptake).
+# October-April, year-round) shown as grouped violins (50% uptake).
 plot_infant_hospitalizations_averted <- function(values, figure_stub) {
   win_colors <- c("September-March" = "#1b6ca8",
                   "October-April"   = "#9aa0a6",
@@ -402,7 +403,7 @@ plot_infant_hospitalizations_averted <- function(values, figure_stub) {
 
   if (is.null(values) || nrow(values) == 0) return(invisible(NULL))
   values_df <- values |>
-    filter(datasource == "nssp", scenario_id == "uptake_100", !is.na(season),
+    filter(datasource == "nssp", scenario_id == "uptake_50", !is.na(season),
            !is.na(hospitalizations_averted_vs_baseline)) |>
     transmute(
       season,
@@ -447,7 +448,7 @@ plot_infant_hospitalizations_averted <- function(values, figure_stub) {
                        expand = expansion(mult = c(0.02, 0.06))) +
     coord_cartesian(ylim = c(y_lower, y_upper)) +
     labs(x = NULL, fill = NULL,
-         y = "Expected RSV hospitalizations averted per state\n(100% uptake)") +
+         y = "Expected RSV hospitalizations averted per state\n(50% uptake)") +
     theme_minimal(base_size = 11) +
     theme(panel.grid.major.x = element_blank(),
           panel.grid.minor = element_blank(),
@@ -459,7 +460,7 @@ plot_infant_hospitalizations_averted <- function(values, figure_stub) {
 
 # Figure 5: national hospitalizations averted vs the October-March baseline for
 # three windows (September-March, October-April, year-round), by season, as
-# stacked panels A (primary model) and B (100% uptake). Combined with cowplot.
+# stacked panels A (primary model) and B (50% uptake). Combined with cowplot.
 plot_infant_hospitalizations_averted_ab <- function(summary_df) {
   if (!requireNamespace("cowplot", quietly = TRUE)) {
     message("Skipping figure 5: cowplot not installed.")
@@ -501,8 +502,8 @@ plot_infant_hospitalizations_averted_ab <- function(summary_df) {
             panel.grid.major.x = element_blank())
   }
 
-  p_a <- averted_panel("reference_12mo", "National hospitalizations averted\n(primary model)")
-  p_b <- averted_panel("uptake_100", "National hospitalizations averted\n(100% uptake)")
+  p_a <- averted_panel("reference_12mo", "National hospitalizations averted\n(primary 18.5% uptake)")
+  p_b <- averted_panel("uptake_50", "National hospitalizations averted\n(50% uptake)")
   if (is.null(p_a) || is.null(p_b)) return(invisible(NULL))
 
   # Legend on panel A (top-right), so it sits just above the plot rather than
@@ -514,7 +515,7 @@ plot_infant_hospitalizations_averted_ab <- function(summary_df) {
     rel_heights = c(1.12, 1)
   )
 
-  save_plot(p, "fig5_infant_ppx_hospitalizations_averted_primary_vs_full_uptake",
+  save_plot(p, "fig5_infant_ppx_hospitalizations_averted_primary_vs_50pct_uptake",
             width = 7.5, height = 8)
   invisible(p)
 }
@@ -587,13 +588,13 @@ plot_ridgeline_nssp(nssp_outside)
 # Figure 3: window advantage (Sep-Mar, Oct-Apr, year-round) over Oct-March baseline
 plot_infant_ppx_window_advantage_forest(infant_stress)
 
-# Figure 4: per-state distribution of hospitalizations averted, three windows, 100% uptake
+# Figure 4: per-state distribution of hospitalizations averted, three windows, 50% uptake
 plot_infant_hospitalizations_averted(
   hosp_averted,
   "fig4_infant_ppx_hospitalizations_averted_by_window"
 )
 
-# Figure 5: national hospitalizations averted, three windows, primary vs 100% uptake (panels A/B)
+# Figure 5: national hospitalizations averted, three windows, primary vs 50% uptake (panels A/B)
 plot_infant_hospitalizations_averted_ab(hosp_summary)
 
 # Supplementary: state-level time series

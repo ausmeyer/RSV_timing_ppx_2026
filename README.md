@@ -1,10 +1,11 @@
 # RSV prophylaxis timing analysis
 
-Code for **Predictive modeling of Nirsevimab timing to improve infant RSV protection**.
+Code for **Predictive modeling of nirsevimab timing to improve infant RSV protection**.
 
 ## Reproduce the manuscript results
 
-Install Python 3, R, and standard build tools, then run:
+Requirements: Python 3.10-3.12, R 4.2 or newer, `make`, and internet access for
+the first run. The complete workflow is:
 
 ```bash
 git clone https://github.com/ausmeyer/RSV_timing_ppx_2026.git
@@ -15,30 +16,50 @@ make reproduce
 
 `make reproduce` downloads the public CDC NSSP and NHSN data through June 20,
 2026, runs the complete analysis, creates the figures, and verifies the key
-outputs. CDC may revise previously released surveillance values, so small numeric differences from the accepted manuscript are possible.
+outputs. CDC may revise previously released surveillance values, so small
+numeric differences from the accepted manuscript are possible.
 
-To rerun without network access after the first successful download:
+The full longitudinal sensitivity suite typically takes about 30-45 minutes on
+a laptop. Detailed progress is written to `pipeline.log`; the console reports
+only warnings and the final verification result.
+
+After one successful download, the same analysis can be reproduced without
+network access with one command:
 
 ```bash
 make cached
-make stats
-make verify
 ```
 
 ## Outputs
 
 - `results/figures/`: manuscript Figures 1-5 and Supplemental Figures S1-S2
+- `results/final_figures/`: publication Figures 1-5 copied from the regenerated
+  figure outputs
 - `results/tables/`: the 13 tables needed to verify the reported results and figures
 - `results/manuscript_stats.txt`: a readable summary of the reported statistics
 
-All data and generated outputs are ignored by Git. The published primary model is
-defined directly in `config.yaml`.
+All downloaded data and generated outputs are ignored by Git. The primary model
+is defined in `config.yaml`. In each annual administration window, uptake is the
+probability that a previously untreated infant with an eligible opportunity
+receives nirsevimab at the first eligible visit. Later visits in the same window
+do not create additional modeled opportunities. Infants who remain untreated and
+younger than 8 months may receive nirsevimab in a later annual window; prior
+recipients are not redosed. Year-round administration is evaluated analytically
+at steady state.
+
+The sensitivity suite contains the primary model plus 10 prespecified variants:
+an 8-month exposure censor; 50%, 75%, and 100% uptake; 20% and 60%
+newborn/first-week dosing; 0- and 30-day routine-visit delays; rapid waning; and
+one window-start opportunity for an otherwise eligible untreated infant with no
+remaining routine visit before aging out.
 
 ## Useful commands
 
 ```bash
 make test       # run code-level checks
 make figures    # rebuild figures from existing tables
+make tables     # rebuild tables and statistics without invoking R
+make verify     # verify the current tables, figures, and primary assumptions
 make clean      # remove regenerated outputs; keep raw inputs and final upload copies
 ```
 
