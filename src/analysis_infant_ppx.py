@@ -995,6 +995,41 @@ def _summarise_birth_month(cohort_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _apply_year_round_steady_state(
+    state_summary: pd.DataFrame,
+    model_cfg: dict,
+) -> pd.DataFrame:
+    """Replace supported year-round fields with analytic steady-state values."""
+    if state_summary.empty or "window_name" not in state_summary.columns:
+        return state_summary
+
+    yr_mask = state_summary["window_name"] == "year_round"
+    if not yr_mask.any():
+        return state_summary
+
+    yr_ss, yr_receipt = year_round_steady_state_metrics(model_cfg)
+    if "population_activity_weighted_protection" in state_summary.columns:
+        state_summary.loc[
+            yr_mask, "population_activity_weighted_protection"
+        ] = yr_ss
+    if "share_receiving_ppx" in state_summary.columns:
+        state_summary.loc[yr_mask, "share_receiving_ppx"] = yr_receipt
+
+    unsupported_person_fields = (
+        "median_person_activity_fractional_protection",
+        "mean_person_activity_fractional_protection",
+        "q25_person_activity_fractional_protection",
+        "q75_person_activity_fractional_protection",
+        "median_person_calendar_fractional_protection",
+        "mean_person_calendar_fractional_protection",
+    )
+    for column in unsupported_person_fields:
+        if column in state_summary.columns:
+            state_summary.loc[yr_mask, column] = np.nan
+
+    return state_summary
+
+
 def create_primary_parameter_table(config: dict) -> pd.DataFrame:
     """Build the datasource-independent provenance table behind manuscript Table 2."""
     model = config["infant_ppx_model"]
@@ -1207,29 +1242,27 @@ def run_infant_ppx_analysis(
     state_summary = _summarise_state(cohort_df)
 
     # Year-round is a continuously running (any-time-of-year) birth-dose program and
-    # must be evaluated as an established program. Replace the single-season cohort
-    # estimate for the year_round window with the steady-state value, which removes a
-    # startup artifact and is independent of the epidemic curve (see
-    # year_round_steady_state_protection). Windowed policies are genuinely
-    # single-season and are left unchanged.
+    # must be evaluated as an established program. Replace its supported aggregate
+    # fields with steady-state values, which removes a startup artifact and is
+    # independent of the epidemic curve (see year_round_steady_state_protection).
+    # Person-level distribution summaries are not identified by this analytic
+    # steady-state calculation and are set to missing. Windowed policies are left
+    # unchanged.
     if "year_round" in set(WINDOWS):
-        yr_ss, yr_receipt = year_round_steady_state_metrics(model_cfg)
-        yr_mask = state_summary["window_name"] == "year_round"
-        for _col in (
-            "population_activity_weighted_protection",
-            "median_person_activity_fractional_protection",
-            "mean_person_activity_fractional_protection",
-            "q25_person_activity_fractional_protection",
-            "q75_person_activity_fractional_protection",
-        ):
-            if _col in state_summary.columns:
-                state_summary.loc[yr_mask, _col] = yr_ss
-        state_summary.loc[yr_mask, "share_receiving_ppx"] = yr_receipt
+        state_summary = _apply_year_round_steady_state(
+            state_summary,
+            model_cfg,
+        )
 
     birth_month_summary = (
         _summarise_birth_month(cohort_df)
         if include_birth_month_summary else pd.DataFrame()
     )
+    if "year_round" in set(WINDOWS):
+        birth_month_summary = _apply_year_round_steady_state(
+            birth_month_summary,
+            model_cfg,
+        )
 
     logger.info(
         "Infant PPX model complete: %s state-season-window rows",
