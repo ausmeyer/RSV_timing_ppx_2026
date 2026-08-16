@@ -552,7 +552,7 @@ def run_pipeline(
     refresh_data: bool = False,
     skip_figures: bool = False,
 ) -> dict:
-    """Run the accepted-manuscript analysis using the configured data cutoff."""
+    """Run the manuscript analysis using the configured data cutoff."""
     logger.info("RSV TIMING 2025-26 EXTENSION PIPELINE")
     logger.info(f"Started at: {datetime.now().isoformat()}")
 

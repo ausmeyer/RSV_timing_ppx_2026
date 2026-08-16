@@ -36,7 +36,7 @@ nhsn_fields:
   rsv_total: "totalconfrsvnewadm"
 
 # Publication analysis data contract. Pull the live public data through the
-# last week available for the accepted analysis; never select a cache by age.
+# last week in the manuscript analysis; never select a cache by age.
 analysis_data:
   start_date: "2023-07-01"
   end_date: "2026-06-20"
@@ -130,16 +130,18 @@ analysis:
 #   year_round:       Jul 1 - Jun 30 (evaluated at steady state)
 
 # Primary infant prophylaxis protection model. This is a deliberately
-# explainable seasonal-coverage model: births are uniform by day, and uptake is
-# the probability that a previously untreated infant with an eligible opportunity
-# receives prophylaxis at the first such visit in an annual window. Protection is
-# evaluated against each state's observed RSV curve.
+# explainable seasonal first-opportunity model: births are uniform by day, and
+# uptake is a modeled first-opportunity receipt probability for a previously untreated
+# infant in an annual window. Protection is evaluated against each state's
+# observed RSV curve.
 infant_ppx_model:
   enabled: true
   scenario_label: "Seasonal coverage at first eligible visit"
-  # Probability of receipt among previously untreated infants with an eligible
-  # opportunity in one annual administration window. This is not a fresh chance
-  # at every visit.
+  # Modeled probability of receipt at the first eligible opportunity among
+  # previously untreated infants in one annual administration window. The 18.5%
+  # value is informed by Boundy et al.'s launch-season population coverage; that
+  # estimate was not a directly observed probability conditional on an eligible
+  # opportunity. This is not a fresh chance at every visit.
   uptake: 0.185
   eligibility_max_age_months: 8
   exposure_censor_age_months: 12
@@ -168,7 +170,12 @@ infant_ppx_model:
   first_outpatient_visit_days: [7, 14]
   first_outpatient_visit_probabilities: [0.5, 0.5]
   newborn_first_week_dose_probability: 0.381
+  # Modeling assumption informed by CMS/NCQA HEDIS W30 completion. W30 measures
+  # completion of six well-child visits by 15 months, not whether individual
+  # visits occurred on schedule.
   routine_visit_on_time_probability: 0.59
+  # Transparent modeled delay for the complementary pathway; 14 days is not a
+  # directly observed national delay distribution.
   routine_visit_delay_days: 14
   well_child_visit_days: [7, 14, 30.4375, 60.875, 121.75, 182.625]
   birth_weight_scheme: "uniform"  # uniform or seasonal_national

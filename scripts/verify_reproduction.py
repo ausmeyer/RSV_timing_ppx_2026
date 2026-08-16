@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Run automated consistency checks for the current pipeline outputs."""
 
+import argparse
+import re
 from pathlib import Path
+import sys
 from zipfile import ZipFile
 
 import pandas as pd
@@ -9,6 +12,12 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.data_contract import verify_frozen_manifest
+
+
 TABLES = ROOT / "results" / "tables"
 FIGURES = ROOT / "results" / "figures"
 FINAL_FIGURES = ROOT / "results" / "final_figures"
@@ -47,13 +56,86 @@ FINAL_FIGURE_STUBS = {
     "fig5_infant_ppx_hospitalizations_averted_primary_vs_50pct_uptake",
 }
 
+# These unrounded values are the manuscript NSSP totals for the
+# September-March versus October-March comparison. Keeping the unrounded
+# contract prevents a materially different result from passing merely because
+# it happens to round to the same displayed integer.
+MANUSCRIPT_EARLY_HOSPITALIZATION_TOTALS = {
+    ("reference_12mo", "2023-2024"): (712.5977945808723, 713),
+    ("reference_12mo", "2024-2025"): (408.3669792288585, 408),
+    ("reference_12mo", "2025-2026"): (243.48905681612166, 243),
+    ("uptake_50", "2023-2024"): (1925.9399853537088, 1926),
+    ("uptake_50", "2024-2025"): (808.3814845083957, 808),
+    ("uptake_50", "2025-2026"): (413.77679903305, 414),
+    ("uptake_100", "2023-2024"): (3851.8799707074177, 3852),
+    ("uptake_100", "2024-2025"): (679.2612104517825, 679),
+    ("uptake_100", "2025-2026"): (51.992541233041216, 52),
+}
+
+# Median percentage-point gains for September-March versus October-March in
+# the no-routine-visit catch-up sensitivity. Values are stored on the
+# fractional scale in the output table.
+MANUSCRIPT_CATCHUP_EARLY_DELTAS = {
+    "nssp": (0.0047836682368414, 0.48),
+    "nhsn": (0.0020601422873407, 0.21),
+}
+
+MANUSCRIPT_VALUE_ABS_TOLERANCE = 1e-6
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
 
 
+def verify_headline_rows(
+    nssp_2526: pd.DataFrame,
+    nhsn_2526: pd.DataFrame,
+    *,
+    allow_live_inputs: bool,
+) -> None:
+    """Apply structural checks always and manuscript-value checks when frozen."""
+    require(
+        nssp_2526["jurisdiction"].nunique() == 51,
+        "NSSP 2025-26 must contain 51 jurisdictions.",
+    )
+    require(
+        nhsn_2526["jurisdiction"].nunique() == 51,
+        "NHSN 2025-26 must contain 51 jurisdictions.",
+    )
+    if not allow_live_inputs:
+        require(
+            0.14 < nssp_2526["outside_fraction"].median() < 0.19,
+            "NSSP headline is out of range.",
+        )
+        require(
+            0.11 < nhsn_2526["outside_fraction"].median() < 0.17,
+            "NHSN headline is out of range.",
+        )
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--allow-live-inputs",
+        action="store_true",
+        help=(
+            "run structural and model-contract checks without requiring the "
+            "materialized frozen inputs or manuscript data-dependent values"
+        ),
+    )
+    args = parser.parse_args()
+
+    verified_inputs = verify_frozen_manifest()
+    if not args.allow_live_inputs:
+        for key, (snapshot, materialized) in verified_inputs.items():
+            require(
+                materialized.is_file()
+                and materialized.read_bytes() == snapshot.read_bytes(),
+                f"Materialized input {key!r} does not match the frozen manuscript "
+                "snapshot. Run `make frozen-data` before manuscript verification.",
+            )
+
     observed_tables = {path.name for path in TABLES.glob("*.csv")}
     require(observed_tables == EXPECTED_TABLES, (
         f"Output-table contract mismatch. Missing={sorted(EXPECTED_TABLES - observed_tables)}; "
@@ -168,10 +250,11 @@ def main() -> None:
     nhsn = pd.read_csv(TABLES / "nhsn_outside_fraction_by_state.csv")
     nssp_2526 = nssp[nssp["season"] == "2025-2026"]
     nhsn_2526 = nhsn[nhsn["season"] == "2025-2026"]
-    require(nssp_2526["jurisdiction"].nunique() == 51, "NSSP 2025-26 must contain 51 jurisdictions.")
-    require(nhsn_2526["jurisdiction"].nunique() == 51, "NHSN 2025-26 must contain 51 jurisdictions.")
-    require(0.14 < nssp_2526["outside_fraction"].median() < 0.19, "NSSP headline is out of range.")
-    require(0.11 < nhsn_2526["outside_fraction"].median() < 0.17, "NHSN headline is out of range.")
+    verify_headline_rows(
+        nssp_2526,
+        nhsn_2526,
+        allow_live_inputs=args.allow_live_inputs,
+    )
 
     stress = pd.read_csv(TABLES / "infant_ppx_stress_test_window_summary.csv")
     prohibited = {"bootstrap_pr_delta_gt_zero", "delta_ci_lower", "delta_ci_upper"}
@@ -236,6 +319,71 @@ def main() -> None:
         "Year-round receipt must equal total uptake at steady state.",
     )
 
+    expected_year_round_keys = {
+        (datasource, scenario_id)
+        for datasource in ("nssp", "nhsn")
+        for scenario_id in expected_scenarios
+    }
+    all_year_round = stress[stress["window_name"] == "year_round"]
+    observed_year_round_keys = set(
+        zip(all_year_round["datasource"], all_year_round["scenario_id"])
+    )
+    require(
+        observed_year_round_keys == expected_year_round_keys
+        and not all_year_round.duplicated(["datasource", "scenario_id"]).any(),
+        "Year-round stress rows must contain one row per datasource and scenario.",
+    )
+    unsupported_person_fields = [
+        column
+        for column in (
+            "median_person_activity_fractional_protection",
+            "mean_person_activity_fractional_protection",
+            "q25_person_activity_fractional_protection",
+            "q75_person_activity_fractional_protection",
+            "median_person_calendar_fractional_protection",
+            "mean_person_calendar_fractional_protection",
+        )
+        if column in stress.columns
+    ]
+    require(
+        {
+            "median_person_activity_fractional_protection",
+            "q25_person_activity_fractional_protection",
+            "q75_person_activity_fractional_protection",
+        }.issubset(unsupported_person_fields),
+        "Stress table is missing the expected person-level summary fields.",
+    )
+    nonmissing_year_round = all_year_round[
+        unsupported_person_fields
+    ].notna()
+    require(
+        not nonmissing_year_round.any().any(),
+        "Year-round rows contain unsupported person-level distribution summaries: "
+        f"{sorted(nonmissing_year_round.columns[nonmissing_year_round.any()].tolist())}",
+    )
+
+    if not args.allow_live_inputs:
+        for datasource, (expected_delta, displayed_pp) in (
+            MANUSCRIPT_CATCHUP_EARLY_DELTAS.items()
+        ):
+            row = stress[
+                (stress["datasource"] == datasource)
+                & (stress["scenario_id"] == "catchup_no_routine_visit")
+                & (stress["window_name"] == "early_sep_mar")
+            ]
+            require(
+                len(row) == 1,
+                f"Expected exactly one {datasource.upper()} catch-up early-window row.",
+            )
+            observed_delta = float(row.iloc[0]["delta_vs_baseline_oct_mar"])
+            require(
+                abs(observed_delta - expected_delta) <= MANUSCRIPT_VALUE_ABS_TOLERANCE,
+                f"{datasource.upper()} catch-up median gain changed: "
+                f"expected {expected_delta * 100:.6f} percentage points "
+                f"(reported as {displayed_pp:.2f}), observed "
+                f"{observed_delta * 100:.6f}.",
+            )
+
     hospitalizations = pd.read_csv(TABLES / "infant_ppx_hospitalizations_averted.csv")
     require(
         "comparison_population_activity_weighted_protection" in hospitalizations.columns,
@@ -272,6 +420,76 @@ def main() -> None:
     require(
         ((detail_totals - summary_totals).abs() <= 1e-9).all(),
         "Hospitalization summary totals do not equal the corresponding summed state detail rows.",
+    )
+
+    if not args.allow_live_inputs:
+        for (
+            scenario_id,
+            season,
+        ), (expected_total, displayed_total) in (
+            MANUSCRIPT_EARLY_HOSPITALIZATION_TOTALS.items()
+        ):
+            row = hospitalization_summary[
+                (hospitalization_summary["datasource"] == "nssp")
+                & (hospitalization_summary["scenario_id"] == scenario_id)
+                & (hospitalization_summary["season"] == season)
+                & (
+                    hospitalization_summary["comparison_window_name"]
+                    == "early_sep_mar"
+                )
+            ]
+            require(
+                len(row) == 1,
+                "Expected exactly one manuscript NSSP early-window hospitalization row "
+                f"for {scenario_id}, {season}.",
+            )
+            observed_total = float(
+                row.iloc[0]["total_hospitalizations_averted_vs_baseline"]
+            )
+            require(
+                abs(observed_total - expected_total) <= MANUSCRIPT_VALUE_ABS_TOLERANCE,
+                "Manuscript NSSP early-window hospitalization total changed for "
+                f"{scenario_id}, {season}: expected {expected_total:.6f} "
+                f"(reported as {displayed_total:,}), observed {observed_total:.6f}.",
+            )
+
+    figure_source = (ROOT / "src" / "figures.R").read_text()
+    fig4_start = figure_source.find(
+        "plot_infant_hospitalizations_averted <- function"
+    )
+    fig5_start = figure_source.find(
+        "plot_infant_hospitalizations_averted_ab <- function"
+    )
+    require(
+        0 <= fig4_start < fig5_start,
+        "Could not locate the Figure 4 and Figure 5 plotting functions.",
+    )
+    fig4_source = figure_source[fig4_start:fig5_start]
+    require(
+        re.search(
+            r'filter\s*\(\s*datasource\s*==\s*"nssp"\s*,\s*'
+            r'scenario_id\s*==\s*"uptake_50"',
+            fig4_source,
+        )
+        is not None,
+        "Figure 4 must select the NSSP uptake_50 scenario.",
+    )
+
+    fig5_end = figure_source.find("plot_timeseries <- function", fig5_start)
+    require(fig5_end > fig5_start, "Could not isolate the Figure 5 plotting function.")
+    fig5_source = figure_source[fig5_start:fig5_end]
+    fig5_panel_scenarios = dict(
+        re.findall(
+            r'^\s*p_([ab])\s*<-\s*averted_panel\s*\(\s*"([^"]+)"',
+            fig5_source,
+            flags=re.MULTILINE,
+        )
+    )
+    require(
+        fig5_panel_scenarios
+        == {"a": "reference_12mo", "b": "uptake_50"},
+        "Figure 5 panels must select reference_12mo for panel A and "
+        f"uptake_50 for panel B; observed {fig5_panel_scenarios}.",
     )
     require((ROOT / "results" / "manuscript_stats.txt").is_file(), "Missing manuscript statistics summary.")
 

@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "snapshot_label": "manuscript-analysis-v1.0.0",
+  "release_version": "1.0.0",
+  "packaged_date": "2026-08-16",
+  "analysis_start_date": "2023-07-01",
+  "analysis_end_date": "2026-06-20",
+  "files": {
+    "nssp": {
+      "filename": "nssp_raw_through_20260620.parquet",
+      "target": "data/raw/nssp_raw_through_20260620.parquet",
+      "bytes": 60824,
+      "sha256": "06bf0e777c9771a7190aa73bc7f9eb8afff0f5bba757961d3f877e9873f3d810",
+      "rows": 7956,
+      "columns": [
+        "week_end",
+        "jurisdiction",
+        "rsv_pct",
+        "rsv_pct_smoothed",
+        "covid_pct",
+        "flu_pct",
+        "combined_pct"
+      ],
+      "observed_date_range": ["2023-07-01", "2026-06-20"],
+      "provenance": {
+        "source_url": "https://data.cdc.gov/resource/rdmq-nq56.json",
+        "dataset_id": "rdmq-nq56",
+        "local_snapshot_created_at": "2026-08-14T21:19:00Z",
+        "query": {
+          "start_date": "2023-07-01",
+          "end_date": "2026-06-20",
+          "filter": "trend_source = 'State'",
+          "order": "week_end ASC",
+          "selected_fields": [
+            "week_end",
+            "geography",
+            "percent_visits_rsv",
+            "percent_visits_smoothed_rsv",
+            "percent_visits_covid",
+            "percent_visits_influenza",
+            "percent_visits_combined"
+          ]
+        }
+      }
+    },
+    "nhsn": {
+      "filename": "nhsn_raw_through_20260620.parquet",
+      "target": "data/raw/nhsn_raw_through_20260620.parquet",
+      "bytes": 39438,
+      "sha256": "f953e6bf02f8e030739db444deb5d4e5373c7f733a23910c78bb84c51e03a0fe",
+      "rows": 10452,
+      "columns": [
+        "week_end",
+        "jurisdiction",
+        "rsv_ped_total",
+        "rsv_total",
+        "rsv_ped_0_4"
+      ],
+      "observed_date_range": ["2023-07-01", "2026-06-20"],
+      "provenance": {
+        "source_url": "https://data.cdc.gov/resource/ua7e-t2fy.json",
+        "dataset_id": "ua7e-t2fy",
+        "local_snapshot_created_at": "2026-08-14T21:19:02Z",
+        "query": {
+          "start_date": "2023-07-01",
+          "end_date": "2026-06-20",
+          "order": "weekendingdate ASC",
+          "selected_fields": [
+            "weekendingdate",
+            "jurisdiction",
+            "numconfrsvnewadmped0to4",
+            "totalconfrsvnewadmped",
+            "totalconfrsvnewadm"
+          ]
+        }
+      }
+    },
+    "census": {
+      "filename": "us_state_infant_population_2023_census_pep.csv",
+      "target": "data/raw/us_state_infant_population_2023_census_pep.csv",
+      "bytes": 14055,
+      "sha256": "f442e899d353dbd1fcfa72c4cd5dfd27074e23a2a25502a5571319c8f58f8afe",
+      "rows": 51,
+      "provenance": {
+        "source_url": "https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/state/asrh/sc-est2023-alldata6.csv",
+        "local_snapshot_created_at": "2026-08-14T21:19:03Z",
+        "transformation": "Retain SUMLEV=40, SEX=0, ORIGIN=0, AGE=0; sum POPESTIMATE2023 by state and retain 50 states plus District of Columbia."
+      }
+    },
+    "state_geometry_source": {
+      "filename": "cb_2022_us_state_20m.zip",
+      "target": "data/raw/cb_2022_us_state_20m.zip",
+      "bytes": 186267,
+      "sha256": "fb2c327c32869dc27bee7a6e0e6130f9d936c4f85638b8414af799f1251e3816",
+      "provenance": {
+        "source_url": "https://www2.census.gov/geo/tiger/GENZ2022/shp/cb_2022_us_state_20m.zip",
+        "local_snapshot_created_at": "2026-08-14T22:09:07Z"
+      }
+    },
+    "state_geometry_prepared": {
+      "filename": "us_states_2022_shifted.rds",
+      "target": "data/raw/us_states_2022_shifted.rds",
+      "bytes": 196374,
+      "sha256": "41c62c41c81d5e967ef658d606eb59fccdb2471de257caa07f3bb904ae523f3e",
+      "provenance": {
+        "source_url": "https://www2.census.gov/geo/tiger/GENZ2022/shp/cb_2022_us_state_20m.zip",
+        "local_snapshot_created_at": "2026-08-14T22:12:04Z",
+        "transformation": "Read the source archive with sf, retain the 50 states plus District of Columbia, apply tigris::shift_geometry, and save as RDS.",
+        "tested_environment": {
+          "R": "4.5.1",
+          "sf": "1.1-0",
+          "tigris": "2.2.1"
+        }
+      }
+    }
+  }
+}

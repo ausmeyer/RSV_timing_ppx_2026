@@ -56,10 +56,12 @@ WINDOW_LABELS = {
 
 PARAMETER_SOURCE_ROWS = {
     "uptake": (
-        "The primary model uses 18.5% empirical 2023-24 nirsevimab uptake from "
-        "Boundy et al. MMWR 2025 as seasonal coverage among previously untreated "
-        "infants with an eligible opportunity. Recipients receive prophylaxis at "
-        "their first eligible visit in that annual window."
+        "The primary model uses 18.5% as a modeled first-opportunity receipt "
+        "probability informed by the launch-season population coverage reported "
+        "by Boundy et al. MMWR 2025. That population estimate was not a directly "
+        "observed conditional probability at an eligible opportunity. Previously "
+        "untreated recipients receive prophylaxis at their first eligible visit "
+        "in an annual window."
     ),
     "eligibility_max_age_months": (
         "CDC/ACIP infant RSV antibody guidance recommends protection for eligible "
@@ -111,14 +113,16 @@ PARAMETER_SOURCE_ROWS = {
         "and 12 months."
     ),
     "routine_visit_on_time_probability": (
-        "Realistic-delivery scenario parameter. CMS/NCQA HEDIS W30 well-child "
-        "visit completion in the first 15 months provides a pragmatic anchor for "
-        "the share following an on-schedule routine-visit pathway."
+        "Modeling assumption informed by CMS/NCQA HEDIS W30 well-child visit "
+        "completion in the first 15 months. W30 measures completion of six visits "
+        "by 15 months, not whether individual visits occurred on schedule; its "
+        "59% completion estimate provides a pragmatic pathway anchor."
     ),
     "routine_visit_delay_days": (
-        "Realistic-delivery scenario parameter. A 14-day delayed pathway is a "
-        "transparent sensitivity paired with CMS/NCQA W30 visit-completion data; "
-        "it is not treated as a directly observed national delay distribution."
+        "Modeling assumption. A 14-day delayed pathway is a transparent "
+        "sensitivity informed by CMS/NCQA W30 visit-completion data; W30 does not "
+        "measure delay, and 14 days is not treated as a directly observed national "
+        "delay distribution."
     ),
     "newborn_first_week_dose_probability": (
         "Realistic-delivery scenario parameter. Boundy et al. MMWR 2025 reports "
@@ -1104,13 +1108,14 @@ def create_primary_parameter_table(config: dict) -> pd.DataFrame:
         {
             "parameter": "Uptake",
             "value": (
-                f"{uptake_pct:g}% (primary); "
+                f"{uptake_pct:g}% (primary), modeled first-opportunity "
+                "probability; "
                 "50%, 75%, 100% (sensitivity)"
             ),
-            "source": "Boundy et al., MMWR 2025",
+            "source": "Modeling assumption informed by Boundy et al., MMWR 2025",
             "rationale": (
-                "Seasonal coverage among previously untreated infants with an "
-                "eligible visit"
+                "First-opportunity receipt probability informed by launch-season "
+                "population coverage"
             ),
             "source_detail": PARAMETER_SOURCE_ROWS["uptake"],
         },
@@ -1135,13 +1140,14 @@ def create_primary_parameter_table(config: dict) -> pd.DataFrame:
         {
             "parameter": "Visit timing distribution",
             "value": (
-                f"{on_time_pct:g}% on schedule; {delayed_pct:g}% delayed by "
+                f"{on_time_pct:g}% modeled on schedule; "
+                f"{delayed_pct:g}% modeled as delayed by "
                 f"{model['routine_visit_delay_days']} days"
             ),
-            "source": "NCQA HEDIS W30",
+            "source": "Modeling assumption informed by CMS/NCQA HEDIS W30",
             "rationale": (
-                "Adherence anchor for imperfect routine-care timing in 2023 "
-                "Medicaid cohort"
+                "Pragmatic pathway split informed by six-visit completion; "
+                "14-day delay assumed"
             ),
             "source_detail": (
                 PARAMETER_SOURCE_ROWS["routine_visit_on_time_probability"]

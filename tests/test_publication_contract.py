@@ -6,12 +6,35 @@ import yaml
 
 from src.run_pipeline import create_infant_stress_window_summary
 from src.analysis_infant_ppx import create_primary_parameter_table
+from scripts.verify_reproduction import verify_headline_rows
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicationContractTests(unittest.TestCase):
+    def test_public_metadata_and_default_reproduction_target(self):
+        requested_title = (
+            "Nirsevimab timing and infant RSV infection: Predictive Modeling"
+        )
+        citation = yaml.safe_load((ROOT / "CITATION.cff").read_text())
+        self.assertEqual(
+            citation["preferred-citation"]["title"],
+            requested_title,
+        )
+        self.assertIn(requested_title, (ROOT / "README.md").read_text())
+
+        makefile = (ROOT / "Makefile").read_text()
+        self.assertIn("reproduce: frozen-data", makefile)
+        self.assertIn("live-reproduce: data", makefile)
+
+        snapshot_readme = (ROOT / "data" / "manuscript" / "README.md").read_text()
+        self.assertIn("Census/TIGER/Line® notice", snapshot_readme)
+        self.assertIn(
+            "proprietary name of a commercial product",
+            " ".join(snapshot_readme.split()),
+        )
+
     def test_primary_model_is_in_config(self):
         config = yaml.safe_load((ROOT / "config.yaml").read_text())
         model = config["infant_ppx_model"]
@@ -27,6 +50,33 @@ class PublicationContractTests(unittest.TestCase):
         )
         self.assertEqual(model["program_start_season_year"], 2023)
         self.assertFalse(model["catchup_if_no_routine_visit"])
+
+    def test_live_verification_keeps_structure_without_frozen_headline_ranges(self):
+        jurisdictions = [f"State {index:02d}" for index in range(51)]
+        revised_live = pd.DataFrame(
+            {
+                "jurisdiction": jurisdictions,
+                "outside_fraction": [0.50] * 51,
+            }
+        )
+
+        verify_headline_rows(
+            revised_live,
+            revised_live,
+            allow_live_inputs=True,
+        )
+        with self.assertRaisesRegex(AssertionError, "NSSP headline"):
+            verify_headline_rows(
+                revised_live,
+                revised_live,
+                allow_live_inputs=False,
+            )
+        with self.assertRaisesRegex(AssertionError, "51 jurisdictions"):
+            verify_headline_rows(
+                revised_live.iloc[:-1],
+                revised_live,
+                allow_live_inputs=True,
+            )
 
     def test_parameter_provenance_matches_table_2(self):
         config = yaml.safe_load((ROOT / "config.yaml").read_text())
@@ -46,6 +96,23 @@ class PublicationContractTests(unittest.TestCase):
         self.assertIn("14 days", values["Visit timing distribution"])
         self.assertIn("210", values["Effectiveness curve"])
         self.assertTrue(table["source"].str.len().gt(0).all())
+        indexed = table.set_index("parameter")
+        self.assertIn(
+            "Modeling assumption",
+            indexed.loc["Uptake", "source"],
+        )
+        self.assertIn(
+            "not a directly observed conditional probability",
+            indexed.loc["Uptake", "source_detail"],
+        )
+        self.assertIn(
+            "Modeling assumption",
+            indexed.loc["Visit timing distribution", "source"],
+        )
+        self.assertIn(
+            "W30 does not measure delay",
+            indexed.loc["Visit timing distribution", "source_detail"],
+        )
 
     def test_stress_summary_is_descriptive_only(self):
         rows = []

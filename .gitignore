@@ -24,8 +24,18 @@ env/
 .RData
 .Rproj.user/
 
-# All downloaded data and generated analysis artifacts are local-only.
-data/
+# Only the immutable, public manuscript input snapshot is versioned. Live
+# downloads, materialized caches, and processed data remain local-only.
+data/*
+!data/manuscript/
+data/manuscript/*
+!data/manuscript/README.md
+!data/manuscript/input_manifest.json
+!data/manuscript/nssp_raw_through_20260620.parquet
+!data/manuscript/nhsn_raw_through_20260620.parquet
+!data/manuscript/us_state_infant_population_2023_census_pep.csv
+!data/manuscript/cb_2022_us_state_20m.zip
+!data/manuscript/us_states_2022_shifted.rds
 results/
 
 # Local pipeline state

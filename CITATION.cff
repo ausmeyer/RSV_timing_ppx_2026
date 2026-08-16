@@ -1,9 +1,9 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite the accepted manuscript and this repository."
+message: "If you use this software, please cite the manuscript and this repository."
 title: "RSV prophylaxis timing publication analysis"
 type: software
 version: 1.0.0
-date-released: 2026-08-14
+date-released: 2026-08-16
 license: MIT
 repository-code: "https://github.com/ausmeyer/RSV_timing_ppx_2026"
 authors:
@@ -19,7 +19,7 @@ authors:
     given-names: Mauricio
 preferred-citation:
   type: article
-  title: "Predictive modeling of nirsevimab timing to improve infant RSV protection"
+  title: "Nirsevimab timing and infant RSV infection: Predictive Modeling"
   journal: "Pediatrics"
   authors:
     - family-names: Meyer

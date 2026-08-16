@@ -284,13 +284,13 @@ def log_row_counts(df: pd.DataFrame) -> None:
 
 
 def main():
-    """Validate or download the accepted-manuscript NHSN snapshot."""
+    """Validate or download the current cutoff-restricted NHSN input."""
     from src.data_contract import load_cdc
 
-    logger.info("Loading publication NHSN snapshot...")
+    logger.info("Loading cutoff-restricted NHSN input...")
     df = load_cdc("nhsn")
     log_row_counts(df)
-    logger.info("Publication NHSN snapshot validated.")
+    logger.info("Cutoff-restricted NHSN input validated.")
     return df
 
 

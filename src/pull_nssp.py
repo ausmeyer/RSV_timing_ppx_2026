@@ -308,13 +308,13 @@ def log_row_counts(df: pd.DataFrame) -> None:
 
 
 def main():
-    """Validate or download the accepted-manuscript NSSP snapshot."""
+    """Validate or download the current cutoff-restricted NSSP input."""
     from src.data_contract import load_cdc
 
-    logger.info("Loading publication NSSP snapshot...")
+    logger.info("Loading cutoff-restricted NSSP input...")
     df = load_cdc("nssp")
     log_row_counts(df)
-    logger.info("Publication NSSP snapshot validated.")
+    logger.info("Cutoff-restricted NSSP input validated.")
     return df
 
 
