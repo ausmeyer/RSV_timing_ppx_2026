@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the small set of outputs used by the accepted manuscript."""
+"""Run automated consistency checks for the current pipeline outputs."""
 
 from pathlib import Path
 from zipfile import ZipFile
@@ -245,6 +245,34 @@ def main() -> None:
         not any("early_vs_baseline" in column for column in hospitalizations.columns),
         "Hospitalization table contains stale early-window column names.",
     )
+
+    hospitalization_summary = pd.read_csv(
+        TABLES / "infant_ppx_hospitalizations_averted_summary.csv"
+    )
+    summary_keys = [
+        "datasource",
+        "season",
+        "scenario_id",
+        "comparison_window_name",
+    ]
+    detail_totals = hospitalizations.groupby(summary_keys, dropna=False)[
+        "hospitalizations_averted_vs_baseline"
+    ].sum().sort_index()
+    summary_totals = hospitalization_summary.set_index(summary_keys)[
+        "total_hospitalizations_averted_vs_baseline"
+    ].sort_index()
+    require(
+        summary_totals.index.is_unique,
+        "Hospitalization summary contains duplicate grouping keys.",
+    )
+    require(
+        detail_totals.index.equals(summary_totals.index),
+        "Hospitalization summary groups do not match hospitalization detail groups.",
+    )
+    require(
+        ((detail_totals - summary_totals).abs() <= 1e-9).all(),
+        "Hospitalization summary totals do not equal the corresponding summed state detail rows.",
+    )
     require((ROOT / "results" / "manuscript_stats.txt").is_file(), "Missing manuscript statistics summary.")
 
     public_files = [
@@ -269,7 +297,7 @@ def main() -> None:
                 phrase.lower() not in text,
                 f"Obsolete or revision-history wording remains in {path.name}: {phrase}",
             )
-    print("Reproduction verified.")
+    print("Pipeline checks passed.")
 
 
 if __name__ == "__main__":

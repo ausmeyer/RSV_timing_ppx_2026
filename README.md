@@ -2,7 +2,7 @@
 
 Code for **Predictive modeling of nirsevimab timing to improve infant RSV protection**.
 
-## Reproduce the manuscript results
+## Run the manuscript analysis
 
 Requirements: Python 3.10-3.12, R 4.2 or newer, `make`, and internet access for
 the first run. The complete workflow is:
@@ -14,17 +14,18 @@ make setup
 make reproduce
 ```
 
-`make reproduce` downloads the public CDC NSSP and NHSN data through June 20,
-2026, runs the complete analysis, creates the figures, and verifies the key
-outputs. CDC may revise previously released surveillance values, so small
-numeric differences from the accepted manuscript are possible.
+`make reproduce` runs the analysis procedure using live public CDC NSSP and NHSN
+data restricted to the cutoff configured in `config.yaml` (currently June 20,
+2026), creates the figures, and runs automated consistency checks. CDC may revise
+surveillance values within that date range, so regenerated numeric results may
+differ from the submitted manuscript.
 
 The full longitudinal sensitivity suite typically takes about 30-45 minutes on
 a laptop. Detailed progress is written to `pipeline.log`; the console reports
-only warnings and the final verification result.
+only warnings and the final check result.
 
-After one successful download, the same analysis can be reproduced without
-network access with one command:
+After one successful download, `make cached` reruns the analysis without network
+access using the most recently downloaded local cache:
 
 ```bash
 make cached

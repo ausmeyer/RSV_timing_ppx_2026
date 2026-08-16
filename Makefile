@@ -15,7 +15,7 @@ setup: check-python
 reproduce: data
 	$(PYTHON) -m src.run_pipeline --offline
 	$(PYTHON) -m src.manuscript_stats
-	$(PYTHON) scripts/verify_reproduction.py
+	$(MAKE) check PYTHON=$(PYTHON)
 
 data:
 	$(PYTHON) -m src.data_contract --refresh
@@ -27,7 +27,7 @@ analysis: data
 cached:
 	$(PYTHON) -m src.run_pipeline --offline
 	$(PYTHON) -m src.manuscript_stats
-	$(PYTHON) scripts/verify_reproduction.py
+	$(MAKE) check PYTHON=$(PYTHON)
 
 tables:
 	$(PYTHON) -m src.run_pipeline --offline --skip-figures
@@ -55,10 +55,10 @@ clean:
 
 help:
 	@echo "make setup      Install Python and R dependencies"
-	@echo "make reproduce  Pull fixed-cutoff data, run the analysis, build figures, and verify"
-	@echo "make cached     Reproduce and verify offline from the fixed-cutoff cache"
+	@echo "make reproduce  Pull cutoff-restricted live data, run the analysis, and check outputs"
+	@echo "make cached     Rerun and check outputs offline from the latest local cache"
 	@echo "make tables     Rebuild all tables and statistics without R figures"
 	@echo "make figures    Rebuild and publish Figures 1-5 plus supplemental figures"
 	@echo "make test       Run code-level unit tests"
-	@echo "make verify     Verify the current publication outputs"
+	@echo "make verify     Run consistency checks on the current pipeline outputs"
 	@echo "make clean      Remove generated outputs (raw inputs and final upload copies are preserved)"

@@ -300,11 +300,11 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
             median_protection = row["median_population_activity_weighted_protection"] * 100
             q25 = row["q25_population_activity_weighted_protection"] * 100
             q75 = row["q75_population_activity_weighted_protection"] * 100
-            dose_opp = row["median_share_receiving_ppx"] * 100
+            first_receipt_share = row["median_share_receiving_ppx"] * 100
             add(
                 f"    - {wlabel}: median activity-weighted protection={median_protection:.1f}% "
                 f"(state IQR {q25:.1f}-{q75:.1f}%); "
-                f"dose opportunity={dose_opp:.1f}%"
+                f"expected first-receipt share={first_receipt_share:.1f}%"
             )
         add()
 
@@ -514,7 +514,11 @@ def generate_manuscript_stats(output_path: str = "results/manuscript_stats.txt")
     add("INFANT PROPHYLAXIS PROTECTION MODEL")
     add("-" * 80)
     add("  - Daily birth cohorts with births uniformly distributed across calendar days")
-    add("  - Cohorts begin with infants who could be eligible at the earliest scenario window")
+    add(
+        "  - The cohort grid uses a full 12-month at-risk lookback before the "
+        "earliest scenario window and extends through season end, including "
+        "infants too old for dosing who can still accrue exposure before age 12 months"
+    )
     add("  - In each annual window, uptake is the probability of receipt among previously untreated infants with an eligible opportunity; recipients are dosed at the first such visit")
     add("  - Untreated infants may receive prophylaxis in a later annual window only if still younger than 8 months; prior recipients are not redosed")
     add("  - Reference assumptions: 18.5% seasonal nirsevimab uptake, 38.1% newborn/first-week dosing among recipients, eligibility for receipt before age 8 months, and follow-up censored at age 12 months")
